@@ -27,6 +27,11 @@
  * Bus events added in v0.2: 'flaps:set' (index), 'camera:mode' (id). Actions added: flapsAuto, cameraReset, menu, hud.
  * Engine.paused: modules without `alwaysUpdate` are skipped (menu open). Settings: units, controlSensitivity, autoFlaps, cameraSensitivity, fov, camRecenter, pauseOnMenu, sound.
  *
+ * v0.3: Engine services also include assets, clouds, walk. WalkSystem.mode = 'aircraft' | 'foot' | 'vehicle'; walk.focus = whatever the camera/map should follow.
+ * Bus: 'aircraft:spawn', 'assets:loaded', 'sfx' (name; no consumer yet). Actions: interact, door, turbulence.
+ * Aircraft parts (userData.parts) now also: elevators[], propBlur[], nav[], doors[{id,label,pivot,openAngle,at,in,enter,pos,target,side}], rampAngles. def: cockpit{eyes,seats,panel,floorY,bounds}, interior{floorY,halfW,z0,z1}, walk.hull, camera.copilot.
+ * Surfaces: world.surfaceAt(x,z) -> src/world/Surfaces.js entry; env.windAt(pos) = steady wind + turbulence (env.rot = angular kicks).
+ *
  * Conventions: +X right, +Y up, forward = -Z (body & world). North = -Z, East = +X. SI units internally.
  */
 export {};

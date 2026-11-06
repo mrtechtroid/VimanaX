@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 const { clamp, damp } = THREE.MathUtils;
 const D2R = Math.PI / 180, UP = new THREE.Vector3(0, 1, 0);
-const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _f = new THREE.Vector3(), _l = new THREE.Quaternion(), _m = new THREE.Matrix4(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _m2 = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _f = new THREE.Vector3(), _l = new THREE.Quaternion(), _m = new THREE.Matrix4(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 const wrap = x => ((x + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 const angDamp = (cur, target, k, dt) => cur + wrap(target - cur) * (1 - Math.exp(-k * dt));
 
@@ -9,6 +9,7 @@ export const CAMERA_MODES = [
   { id: 'chase', label: 'Chase', hint: 'Follows behind. Drag to look around; it swings back when you let go.' },
   { id: 'orbit', label: 'Orbit', hint: 'Free orbit that stays where you leave it.' },
   { id: 'cockpit', label: 'Cockpit', hint: 'Pilot\u2019s eye. Drag to look around, wheel to zoom.' },
+  { id: 'copilot', label: 'Co-pilot', hint: 'Right-hand seat view.' },
   { id: 'wing', label: 'Wing', hint: 'Mounted on the left wing.' },
   { id: 'flyby', label: 'Fly-by', hint: 'Trackside camera that jumps ahead as you pass.' },
   { id: 'tower', label: 'Tower', hint: 'Telephoto from the nearest airport.' },
@@ -26,9 +27,13 @@ export const CAMERA_MODES = [
 export class CameraManager {
   constructor() {
     this.modes = CAMERA_MODES.map(m => m.id); this.i = 0; this.views = {}; this.keys = new Set(); this.ptr = new Map();
-    this.idle = 99; this.alwaysUpdate = true; this.follow = { yaw: 0, pitch: 0, init: false }; this.fb = null; this.fov = 60; this.last = null; this.orbitAz = 0;
+    this.idle = 99; this.alwaysUpdate = true; this.blend = null; this.subjectKey = null; this.footDist = 3.2; this.follow = { yaw: 0, pitch: 0, init: false }; this.fb = null; this.fov = 60; this.last = null; this.orbitAz = 0;
   }
   get mode() { return this.modes[this.i]; }
+  /** True when the viewpoint is inside an aircraft (cockpit instruments get redrawn). */
+  get inside() { const w = this.e?.walk; return !!w && ((w.mode === 'aircraft' && (this.mode === 'cockpit' || this.mode === 'copilot')) || (w.mode === 'foot' && !!w.inside)); }
+  available(id) { const a = this.e.cargo.driven; if (!a) return true; return id !== 'wing' && id !== 'copilot'; }
+  poseNow() { const c = this.e.camera; return { pos: c.position.clone(), quat: c.quaternion.clone(), fov: c.fov }; }
   get view() { return this.views[this.mode] ??= this.fresh(this.mode); }
   fresh(mode) {
     const c = (this.e?.cargo?.driven || this.e?.aircraft?.player)?.def.camera;
@@ -36,14 +41,14 @@ export class CameraManager {
   }
   set(mode) {
     const i = this.modes.indexOf(mode); if (i < 0) return;
-    this.i = i; this.fb = null; this.idle = 99; this.views[mode] = this.fresh(mode);
+    this.blend = { ...this.poseNow(), t: 0 }; this.i = i; this.fb = null; this.idle = 99; this.views[mode] = this.fresh(mode);
     const a = this.e.cargo.driven || this.e.aircraft.player; if (a) { _f.set(0, 0, -1).applyQuaternion(a.quat); this.orbitAz = Math.atan2(-_f.x, -_f.z); }
     this.e.bus.emit('camera:mode', mode);
   }
   init(e) {
     this.e = e; const cv = e.renderer.domElement; cv.style.cursor = 'grab';
     e.bus.on('action', a => {
-      if (a === 'camera') { this.set(this.modes[(this.i + 1) % this.modes.length]); e.bus.emit('hud:message', `Camera: ${CAMERA_MODES[this.i].label}`); }
+      if (a === 'camera') { if (e.walk.mode === 'foot') return; let n = this.i; do n = (n + 1) % this.modes.length; while (!this.available(this.modes[n])); this.set(this.modes[n]); e.bus.emit('hud:message', `Camera: ${CAMERA_MODES[this.i].label}`); }
       else if (a === 'cameraReset') this.reset();
     });
     cv.addEventListener('contextmenu', ev => ev.preventDefault());
@@ -61,8 +66,8 @@ export class CameraManager {
     addEventListener('keyup', ev => this.keys.delete(ev.code));
     addEventListener('blur', () => this.keys.clear());
   }
-  look(dx, dy) { const v = this.view, k = 0.006 * this.e.settings.get('cameraSensitivity'); v.yaw += dx * k; v.pitch += dy * k; this.idle = 0; }
-  zoomBy(f) { const v = this.view; v.zoom = clamp(v.zoom * f, 0.3, 4); this.idle = 0; }
+  look(dx, dy) { if (this.e.walk.mode === 'foot') { const k = 0.0045 * this.e.settings.get('cameraSensitivity'); this.e.walk.look(-dx * k, -dy * k); return; } const v = this.view, k = 0.006 * this.e.settings.get('cameraSensitivity'); v.yaw += dx * k; v.pitch += dy * k; this.idle = 0; }
+  zoomBy(f) { if (this.e.walk.mode === 'foot') { this.footDist = clamp(this.footDist * f, 1.6, 9); return; } const v = this.view; v.zoom = clamp(v.zoom * f, 0.3, 4); this.idle = 0; }
   reset() { this.views[this.mode] = this.fresh(this.mode); this.idle = 99; this.e.bus.emit('hud:message', 'View reset'); }
   /** Held keys + gamepad D-pad. */
   poll(dt) {
@@ -75,9 +80,11 @@ export class CameraManager {
     const r3 = !!b(11); if (r3 && !this._r3) this.reset(); this._r3 = r3;
   }
   update(dt) {
-    const e = this.e, a = e.cargo.driven || e.aircraft.player; if (!a) return;
-    if (this.last !== a) { if (this.last) this.last.mesh.visible = true; this.last = a; this.follow.init = false; this.fb = null; }
-    dt = Math.min(dt, 0.05); this.poll(dt); this.idle += dt;
+    const e = this.e, walk = e.walk, foot = walk.mode === 'foot', a = foot ? walk : (e.cargo.driven || e.aircraft.player); if (!a) return;
+    const key = foot ? 'foot' : a; if (this.subjectKey !== key) { if (this.subjectKey) this.blend = { ...this.poseNow(), t: 0 }; this.subjectKey = key; this.follow.init = false; this.fb = null; if (!foot && !this.available(this.mode)) this.i = 0; }
+    this.last = foot ? null : a; dt = Math.min(dt, 0.05); this.poll(dt); this.idle += dt;
+    if (foot) { this.footCamera(dt); this.finish(dt, 70); return; }
+    const player = e.aircraft.player; if (player) player.mesh.visible = !player.destroyed;
     const cam = e.camera, mode = this.mode, c = a.def.camera, s = e.settings, baseFov = s.get('fov'), size = Math.max(c.chaseDist * 0.5, 2), world = e.world;
     const v = this.view;
     if (e.paused && (mode === 'chase' || mode === 'orbit')) { v.yaw += dt * 0.2; this.idle = 0; } // slow showcase drift behind the menu
@@ -85,15 +92,15 @@ export class CameraManager {
     if (recentre) { const k = 1 - Math.exp(-dt * 2.5); v.yaw -= v.yaw * k; v.pitch -= v.pitch * k; }
     v.pitch = clamp(v.pitch, mode === 'cockpit' ? -1.2 : -0.5, mode === 'cockpit' ? 1.3 : 1.45);
     if (mode !== 'orbit' && mode !== 'cockpit') v.yaw = wrap(v.yaw);
-    a.mesh.visible = mode !== 'cockpit' && !a.destroyed;
+    if (a !== e.aircraft.player) a.mesh.visible = true;
 
     _f.set(0, 0, -1).applyQuaternion(a.quat); const hdg = Math.atan2(-_f.x, -_f.z), fp = Math.asin(clamp(_f.y, -1, 1)), F = this.follow;
     if (!F.init) { F.yaw = hdg; F.pitch = fp * 0.45; F.init = true; }
     F.yaw = angDamp(F.yaw, hdg, 3.2, dt); F.pitch = damp(F.pitch, fp * 0.45, 2.5, dt);
 
     let fov = baseFov;
-    if (mode === 'cockpit') {
-      cam.position.set(c.eye.x, c.eye.y, c.eye.z).applyQuaternion(a.quat).add(a.pos);
+    if (mode === 'cockpit' || mode === 'copilot') {
+      const eye = mode === 'copilot' && c.copilot ? c.copilot : c.eye; cam.position.set(eye.x, eye.y, eye.z).applyQuaternion(a.quat).add(a.pos);
       _l.setFromEuler(_e.set(v.pitch, v.yaw, 0)); cam.quaternion.copy(a.quat).multiply(_l); fov = baseFov * v.zoom;
     } else if (mode === 'wing' && c.wing) {
       cam.position.set(c.wing.x, c.wing.y, c.wing.z).applyQuaternion(a.quat).add(a.pos);
@@ -111,8 +118,25 @@ export class CameraManager {
       cam.position.copy(a.pos).add(_a); cam.position.y = Math.max(cam.position.y, world.groundHeight(cam.position.x, cam.position.z) + 2.5);
       cam.up.copy(UP); cam.lookAt(_b.copy(a.pos).addScaledVector(UP, c.chaseHeight * 0.18));
     }
-    this.fov = damp(this.fov, fov, 8, dt);
+    this.shake(dt, a, mode === 'cockpit' || mode === 'copilot' ? 1 : 0.4); this.finish(dt, fov);
+  }
+  /** Turbulence / rough-ground shake, applied in camera space. */
+  shake(dt, a, k) {
+    const e = this.e, cam = e.camera, amp = e.settings.get('cameraShake') * k * (0.012 * (e.env.intensity || 0) + 0.5 * Math.abs(a.bump || 0)); if (amp < 1e-4) return; const t = e.time;
+    _a.set(Math.sin(t * 37) * amp, Math.sin(t * 29 + 1) * amp, 0).applyQuaternion(cam.quaternion); cam.position.add(_a); _l.setFromEuler(_e.set(Math.sin(t * 17) * amp * 0.6, 0, Math.sin(t * 23 + 2) * amp * 0.9)); cam.quaternion.multiply(_l);
+  }
+  /** Blend from the previous viewpoint after a seat / mode / subject change, then apply FOV. */
+  finish(dt, fov) {
+    const cam = this.e.camera; this.fov = damp(this.fov, fov, 8, dt);
+    if (this.blend) { const b = this.blend; b.t = Math.min(1, b.t + dt / 0.7); const k = b.t * b.t * (3 - 2 * b.t); cam.position.lerpVectors(b.pos, cam.position, k); cam.quaternion.slerpQuaternions(b.quat, cam.quaternion, k); this.fov = THREE.MathUtils.lerp(b.fov, this.fov, k); if (b.t >= 1) this.blend = null; }
     if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+  }
+  /** First / third person view of the walking pilot. */
+  footCamera(dt) {
+    const e = this.e, w = e.walk, cam = e.camera, eye = w.eye(_a);
+    if (!w.third) { cam.position.copy(eye); cam.quaternion.setFromEuler(_e.set(w.pitch, w.yaw, 0)); }
+    else { _f.set(-Math.sin(w.yaw) * Math.cos(w.pitch), Math.sin(w.pitch), -Math.cos(w.yaw) * Math.cos(w.pitch)); _b.copy(w.pos).setY(w.pos.y + 1.5); cam.position.copy(_b).addScaledVector(_f, -this.footDist).add(_m2.set(0, 0.35, 0)); cam.position.y = Math.max(cam.position.y, e.world.groundHeight(cam.position.x, cam.position.z) + 0.4); cam.up.copy(UP); cam.lookAt(_b); }
+    this.shake(dt, { bump: 0 }, 0);
   }
   /** Fixed trackside camera; jumps ahead of the aircraft again once it has gone past. */
   flyby(a, size) {

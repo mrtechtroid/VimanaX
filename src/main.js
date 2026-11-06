@@ -9,6 +9,9 @@ import { FlightModel } from './physics/FlightModel.js';
 import { AircraftManager } from './aircraft/AircraftManager.js';
 import { PlayerController } from './aircraft/PlayerController.js';
 import { aircraftRegistry } from './aircraft/definitions/index.js';
+import { Assets } from './core/Assets.js';
+import { Clouds } from './world/Clouds.js';
+import { WalkSystem } from './systems/WalkSystem.js';
 import { CargoSystem } from './systems/CargoSystem.js';
 import { DamageSystem } from './systems/DamageSystem.js';
 import { AudioSystem } from './systems/AudioSystem.js';
@@ -22,9 +25,12 @@ const engine = new Engine(document.getElementById('view'));
 engine
   .use('settings', new Settings())
   .use('input', new InputManager())
+  .use('assets', new Assets())
   .use('env', new Environment({ hour: 9, windSpeed: 4, windFrom: 270 }))
   .use('world', new World(worldConfig))
+  .use('clouds', new Clouds())
   .use('cargo', new CargoSystem())
+  .use('walk', new WalkSystem())
   .use('player', new PlayerController())
   .use('aircraft', new AircraftManager(new FlightModel(), aircraftRegistry))
   .use('damage', new DamageSystem())

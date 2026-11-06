@@ -2,7 +2,7 @@ import { UNITS } from './units.js';
 /** Global user settings. Emits 'settings' {key,value} on change. Pass quiet=true to suppress the HUD toast (UI widgets do). */
 export class Settings {
   constructor() {
-    this.v = { units: 'aviation', controlSensitivity: 1, autoFlaps: true, cameraSensitivity: 1, fov: 60, camRecenter: true, pauseOnMenu: true, sound: true };
+    this.v = { units: 'aviation', controlSensitivity: 1, autoFlaps: true, cameraSensitivity: 1, fov: 60, camRecenter: true, pauseOnMenu: true, sound: true, volume: 0.8, autoDoors: true, cameraShake: 1, cockpitHud: false };
   }
   init(e) {
     this.bus = e.bus;

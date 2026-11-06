@@ -27,7 +27,7 @@ export class MapUI {
   }
   info(a, units) { const g = this.guidance(a); if (!g) return ''; const [u, f] = UNITS[units].dist; return `WPT ${g.idx}/${g.n}  ${(g.dist * f).toFixed(1)} ${u}  BRG ${String(Math.round(g.brg)).padStart(3, '0')}\u00b0`; }
   update() {
-    const e = this.e, a = e.cargo.driven || e.aircraft.player, g = this.g, s = this.c.width, big = this.big; if (!a) return;
+    const e = this.e, a = e.walk.focus, g = this.g, s = this.c.width, big = this.big; if (!a) return;
     if (!this.layoutOk && document.body.classList.contains('compact')) { this.layoutOk = true; this.layout(); }
     if (this.route.length) { const w = this.route[this.idx]; if (Math.hypot(w.x - a.pos.x, w.z - a.pos.z) < 250 && this.idx < this.route.length - 1) this.idx++; }
     _v.set(0, 0, -1).applyQuaternion(a.quat); const h = Math.atan2(_v.x, -_v.z), k = big ? s / e.world.cfg.size : s / 5000, cx = big ? 0 : a.pos.x, cz = big ? 0 : a.pos.z;

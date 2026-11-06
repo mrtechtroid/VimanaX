@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SURFACES } from '../world/Surfaces.js';
 const G = 9.81, { clamp } = THREE.MathUtils;
 const _n = new THREE.Vector3(), _v = new THREE.Vector3(), _f = new THREE.Vector3(), _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _l = new THREE.Vector3(), _vh = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _dq = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -10,7 +11,8 @@ export class FlightModel {
     const f = ac.def.flight, c = ac.controls, q = ac.quat, w = ac.angVel;
     const rho = 1.225 * Math.exp(-Math.max(ac.pos.y, 0) / 8500);
     _q.copy(q).invert();
-    const vb = _v.copy(ac.vel).sub(env.windVector()).applyQuaternion(_q); // air-relative velocity, body frame
+    const wind = env.windAt ? env.windAt(ac.pos, ac) : env.windVector(); // steady wind + turbulence at this point
+    const vb = _v.copy(ac.vel).sub(wind).applyQuaternion(_q); // air-relative velocity, body frame
     const V = vb.length(), moving = V > 2;
     const aoa = moving ? Math.atan2(-vb.y, -vb.z) : 0;
     const beta = moving ? Math.asin(clamp(vb.x / V, -1, 1)) : 0;
@@ -33,6 +35,7 @@ export class FlightModel {
     w.x += (f.pitchPower * ac.eff.pitch * c.pitch * eff - f.pitchStab * (aoa - f.trimAoa) * effS - d.x * w.x) * dt;
     w.y += (-f.yawPower * ac.eff.yaw * c.yaw * eff - f.yawStab * beta * effS - d.y * w.y) * dt;
     w.z += (-f.rollPower * ac.eff.roll * c.roll * eff + ac.rollBias - d.z * w.z) * dt;
+    if (env.rot && !ac.onGround) { const k = effS * dt; w.x += env.rot.x * k; w.y += env.rot.y * k; w.z += env.rot.z * k; } // turbulence: random pitch/yaw/roll kicks
     ac.vel.addScaledVector(_f, dt / ac.mass);
     const wl = w.length();
     if (wl > 1e-6) { _dq.setFromAxisAngle(_v.copy(w).divideScalar(wl), wl * dt); q.multiply(_dq); }
@@ -53,11 +56,12 @@ export class FlightModel {
         ac.pos.y = gy; if (ac.vel.y < 0) ac.vel.y = 0;
       }
       _fw.set(0, 0, -1).applyQuaternion(q); _fw.y = 0; _fw.normalize(); _rt.set(-_fw.z, 0, _fw.x);
-      const vF = ac.vel.dot(_fw), vL = ac.vel.dot(_rt), wheels = ac.gearPos > 0.9;
-      ac.vel.addScaledVector(_rt, -vL * Math.min(1, dt * 10));
-      const dec = wheels ? f.rollMu * G + c.brake * f.brakeDecel : 0.5 * G; // belly slide if gear up
+      const vF = ac.vel.dot(_fw), vL = ac.vel.dot(_rt), wheels = ac.gearPos > 0.9, sf = world.surfaceAt ? world.surfaceAt(ac.pos.x, ac.pos.z) : SURFACES.asphalt;
+      ac.surface = sf.id; ac.bump = sf.bump * Math.min(1, Math.abs(vF) / 20) * Math.sin(ac.pos.x * 3.1 + ac.pos.z * 2.3) * Math.sin(ac.pos.z * 5.7 - ac.pos.x * 1.9) * 0.05;
+      ac.vel.addScaledVector(_rt, -vL * Math.min(1, dt * 10 * sf.grip));
+      const dec = wheels ? f.rollMu * sf.roll * G + c.brake * f.brakeDecel * sf.brake : 0.5 * G * (sf.id === 'asphalt' ? 1 : 1.3); // belly slide if gear up
       ac.vel.addScaledVector(_fw, -Math.sign(vF) * Math.min(Math.abs(vF), dec * dt));
-      w.y = -c.yaw * f.steerRate * clamp(vF / 6, -1, 1); // nosewheel steering
+      w.y = -c.yaw * f.steerRate * clamp(vF / 6, -1, 1) * (0.5 + 0.5 * sf.grip); // nosewheel steering
       _e.setFromQuaternion(q);
       _e.z *= 1 - Math.min(1, dt * 6);
       _e.x = clamp(_e.x, 0, f.maxGroundPitch);
@@ -65,6 +69,7 @@ export class FlightModel {
       q.setFromEuler(_e);
       if (_e.x <= 0 && w.x < 0) w.x = 0; w.z = 0;
     }
+    if (!ac.onGround) { ac.bump = 0; ac.surface = null; }
     ac.telemetry.airspeed = V; ac.telemetry.aoa = aoa; ac.telemetry.cl = cl;
   }
 }

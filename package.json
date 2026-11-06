@@ -4,9 +4,14 @@
   "type": "module",
   "description": "Runtime has no build step (three.js via CDN import map). These dev dependencies are only for the headless tests in tests/.",
   "scripts": {
-    "test": "node tests/flaps.mjs && node --import ./tests/register.mjs tests/boot.mjs",
+    "test": "node tests/flaps.mjs && node --import ./tests/register.mjs tests/boot.mjs && node --import ./tests/register.mjs tests/walk.mjs",
     "sim": "node tests/sim.mjs",
-    "pfd": "node tests/pfd-render.mjs"
+    "pfd": "node tests/pfd-render.mjs",
+    "preview": "node tests/preview-light.mjs && node tests/preview-atlas.mjs && node tests/preview-cockpit.mjs && node tests/gauges-render.mjs"
   },
-  "devDependencies": { "three": "0.160.0", "jsdom": "^24.0.0", "canvas": "^2.11.2" }
+  "devDependencies": {
+    "three": "0.160.0",
+    "jsdom": "^24.0.0",
+    "canvas": "^2.11.2"
+  }
 }

@@ -46,3 +46,13 @@ cargo ramp, load/unload, parachute airdrops, drivable vehicles, map + route wayp
 Not yet: seaplanes/water landings, tilt-wing VTOL, SAR/coastguard/AEW/special-ops aircraft, AI aircraft, missions/game modes,
 interactive doors and detailed cockpits, key rebinding UI, sample-based audio, custom (non-circle) coastlines.
 Tested headlessly (v0.2): physics takeoff/landing, auto-flap schedule, full app boot, camera input, menu. NOT yet seen in a real browser (visual layout, WebGL rendering) and tilt signs are unverified on real devices.
+
+
+## v0.3: realism pass
+- **People:** press Enter to stand up (stopped on the ground). Walk (WASD, Shift sprint, Space jump, mouse look, C for third person), open doors (6), board (E), sit in the pilot or co-pilot seat, walk inside the Atlas cargo bay and down its ramp.
+- **Vehicles:** walk to the Scout 4x4, Ferrari 458 or milk truck and press E. Drive a vehicle up the open Atlas ramp to secure it in the bay; get in and reverse out to unload.
+- **Aircraft:** rebuilt as lofted fuselages and airfoil wings with real window and door cut-outs, hinged control surfaces, retractable gear and detailed cockpits (live analog gauges on the Skylark, glass PFD/MFD on the Atlas).
+- **World:** surface types (asphalt, grass, dirt, sand, rock) that change rolling drag, braking, grip and bumpiness; two new strips (Meadow Field grass, Dune Strip dirt); cumulus and stratus clouds you can fly through; turbulence levels (key 7); sky dome with stars and sun shadows.
+- Co-pilot camera, camera shake in turbulence, smooth blends between viewpoints.
+- See `HANDOFF.md` for what is verified, what is not, and what is still missing (sample-based audio, aircraft glTF hook).
+- Third-party model credits: `assets/CREDITS.md`.

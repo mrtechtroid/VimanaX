@@ -161,6 +161,15 @@ input[type=range]{accent-color:var(--cyan);height:28px;width:100%}
 .keys kbd{font:12px var(--num);color:var(--cyan);white-space:nowrap}
 .note{color:var(--dim);font-size:12px;margin-top:10px;max-width:62ch}
 
+/* ---------- on foot / vehicle / interaction prompt ---------------------------------------------------------- */
+#prompt{align-self:center;display:flex;align-items:center;gap:10px;padding:8px 18px;font-size:14px;border-radius:99px;border-color:var(--cyan)}
+#prompt[hidden],#footInfo[hidden]{display:none}
+#prompt kbd{font:700 12px var(--num);background:var(--cyan);color:var(--ink);border-radius:6px;padding:2px 7px}
+#footInfo{align-self:center;display:flex;gap:14px;align-items:baseline;padding:7px 18px;border-radius:99px;font-size:13px}
+#footInfo b{font:700 14px var(--num)}#footInfo span{color:var(--dim)}
+body.on-foot #pfd,body.on-foot #systems,body.in-vehicle #pfd,body.in-vehicle #systems,body.cockpit-view #pfd{display:none}
+body.on-foot #idPlate .sub,body.in-vehicle #idPlate .sub{visibility:hidden}
+
 /* ---------- compact layout (phones / short windows) --------------------------------------------------- */
 body.compact #topbar{gap:6px}
 body.compact #idPlate{padding:5px 10px;min-width:0}

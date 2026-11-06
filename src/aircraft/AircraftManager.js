@@ -15,7 +15,7 @@ export class AircraftManager {
   spawn(id, livery = 0, airport) {
     const def = this.registry.get(id), ac = new Aircraft(def, livery), w = this.e.world, sp = w.spawnPoint(airport);
     ac.bus = this.e.bus; ac.airport = airport; ac.place(sp.pos.x, w.groundHeight(sp.pos.x, sp.pos.z) + def.flight.gearHeight, sp.pos.z, sp.heading);
-    this.e.scene.add(ac.mesh); this.list.push(ac); return ac;
+    this.e.scene.add(ac.mesh); this.list.push(ac); this.player = this.player ?? ac; this.e.bus.emit('aircraft:spawn', ac); return ac;
   }
   respawn(id, livery) {
     const old = this.player; id ??= old.def.id; livery ??= old.livery;
@@ -25,6 +25,6 @@ export class AircraftManager {
   }
   update(dt, e) {
     const n = Math.ceil(dt * 120), h = dt / n;
-    for (const a of this.list) { for (let i = 0; i < n; i++) this.model.step(a, h, e.env, e.world); a.animate(dt, e.time); }
+    for (const a of this.list) { for (let i = 0; i < n; i++) this.model.step(a, h, e.env, e.world); a.animate(dt, e.time, e, a === this.player && e.cameras?.inside); }
   }
 }

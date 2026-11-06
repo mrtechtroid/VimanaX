@@ -1,6 +1,7 @@
 import { UNITS } from '../config/units.js';
 import { flapSpeeds } from '../aircraft/FlapLogic.js';
 import { CAMERA_MODES } from '../camera/CameraManager.js';
+import { TURB_LEVELS } from '../world/Environment.js';
 
 const TABS = [['aircraft', 'Aircraft'], ['flight', 'Flight'], ['world', 'World'], ['camera', 'Camera'], ['controls', 'Controls'], ['help', 'Keys']];
 const ROLE = { 'civil-light': 'Light civil', 'military-transport': 'Military transport' };
@@ -8,10 +9,11 @@ const WEATHER = ['clear', 'cloudy', 'overcast', 'fog'];
 const hex = n => '#' + n.toString(16).padStart(6, '0');
 const KEYS = [
   ['Flying', [['W S', 'Pitch'], ['A D', 'Roll'], ['Q E', 'Yaw / nose wheel'], ['Z X', 'Throttle up / down'], ['Space', 'Brake'], ['R', 'Thrust reverse'], ['O', 'Spoilers']]],
-  ['Configuration', [['G', 'Landing gear'], ['4', 'Auto flaps on / off'], ['F V', 'Flaps down / up (manual)'], ['B', 'Autobrake'], ['L', 'Strobes'], ['J', 'JATO']]],
-  ['Cargo and ground', [['I', 'Cargo ramp'], ['K', 'Load / unload / airdrop'], ['Enter', 'Drive nearest vehicle']]],
+  ['Configuration', [['G', 'Landing gear'], ['4', 'Auto flaps on / off'], ['F V', 'Flaps down / up (manual)'], ['B', 'Autobrake'], ['L', 'Strobes'], ['J', 'JATO'], ['6', 'Open / close nearest door']]],
+  ['On foot and vehicles', [['Enter', 'Stand up from seat / leave vehicle'], ['E', 'Interact (doors, seats, vehicles, ramp) on foot'], ['W A S D', 'Walk / drive'], ['Shift', 'Sprint'], ['Space', 'Jump (brake in a vehicle)'], ['Mouse', 'Look (click view to capture)'], ['C', 'First / third person']]],
+  ['Cargo', [['I', 'Cargo ramp'], ['K', 'Load / unload / airdrop'], ['Drive up the ramp', 'Secures a vehicle in the bay']]],
   ['Camera', [['C', 'Next camera'], ['Drag', 'Look around / orbit'], ['Wheel', 'Zoom'], ['Double-click or 5', 'Reset view'], [', .', 'Look left / right'], ['; /', 'Look up / down'], ['- =', 'Zoom out / in']]],
-  ['World and interface', [['T', 'Time'], ['M', 'Weather'], ['[ ]  Y', 'Wind strength / direction'], ['U', 'Units'], ['P', 'Map'], ['2', 'Clear route'], ['9', 'Cycle HUD'], ['0', 'Sound'], ['1', 'Tilt steering'], ['3', 'Fullscreen'], ['Esc', 'Menu'], ['Backspace', 'Reset aircraft'], ['Tab  N', 'Next aircraft / livery']]],
+  ['World and interface', [['T', 'Time'], ['M', 'Weather'], ['7', 'Turbulence level'], ['[ ]  Y', 'Wind strength / direction'], ['U', 'Units'], ['P', 'Map'], ['2', 'Clear route'], ['9', 'Cycle HUD'], ['0', 'Sound'], ['1', 'Tilt steering'], ['3', 'Fullscreen'], ['Esc', 'Menu'], ['Backspace', 'Reset aircraft'], ['Tab  N', 'Next aircraft / livery']]],
 ];
 
 /** Tabbed menu overlay. Pauses the simulation (setting `pauseOnMenu`). Esc or the menu button toggles it; 'help' opens the Keys tab. */
@@ -69,7 +71,8 @@ export class Menu {
       ['autobrake', 'Autobrake', c.autobrake ? 'Armed' : 'Off', c.autobrake], ['lights', 'Strobes', c.lights ? 'On' : 'Off', c.lights]];
     if (p.def.flight.jato) T.push(['jato', 'JATO', p.jatoLeft > 0 ? 'Firing' : 'Ready', p.jatoLeft > 0]);
     if (p.def.cargo) T.push(['ramp', 'Cargo ramp', c.rampOpen ? 'Open' : 'Closed', c.rampOpen], ['cargo', 'Load / airdrop', `${p.bay.length} in bay`, false]);
-    T.push(['drive', 'Drive vehicle', e.cargo.driven ? 'Driving' : 'Nearest within 40 m', !!e.cargo.driven]);
+    const doors = p.mesh.userData.parts.doors; T.push(['door', 'Doors', doors.some(d => d.target) ? 'Open' : 'Closed', doors.some(d => d.target), doors.some(d => d.target) && (p.controls.throttle > 0.4 || !p.onGround)]);
+    T.push(['interact', e.walk.mode === 'aircraft' ? 'Leave seat' : 'Get back in', e.walk.mode === 'aircraft' ? 'Needs a stopped aircraft' : 'Walk to a door and press E', false]);
     return `<h2>Flight</h2><p class="lead">Auto flaps picks a setting from your airspeed, gear and power, and retracts them if you go too fast. Choosing a flap setting yourself switches to manual.</p>
       <h3>Flaps</h3>${this.seg([['auto', 'Auto'], ...p.def.flaps.map((_, i) => [i, i])], auto ? 'auto' : c.flapIndex, 'flap', auto ? 'auto' : '')}
       <h3>Systems</h3><div class="tiles">${T.map(([a, l, s, on, w]) => `<button class="tile ${w ? 'warn' : on ? 'on' : ''}" data-act="${a}"><b>${l}</b><span>${w ? 'Damaged' : s}</span></button>`).join('')}</div>`;
@@ -87,6 +90,7 @@ export class Menu {
       <div class="seg">${[['Dawn', 6], ['Noon', 12], ['Sunset', 18], ['Night', 22]].map(([l, h]) => `<button data-hour="${h}">${l}</button>`).join('')}</div>
       <h3>Weather</h3>${this.seg(WEATHER.map(w => [w, w[0].toUpperCase() + w.slice(1)]), env.weather, 'wx')}
       <h3>Wind</h3>${this.field('f-ws', 'Strength', 0, 25, 1, env.wind.speed, `${Math.round(env.wind.speed * sk)} ${sl}`)}${this.field('f-wd', 'Blowing from', 0, 345, 15, env.wind.from, `${String(env.wind.from).padStart(3, '0')}\u00b0`)}
+      <h3>Turbulence</h3>${this.seg(Object.keys(TURB_LEVELS).map(k => [k, k[0].toUpperCase() + k.slice(1)]), env.turbulence, 'turb')}<p class="note">Auto follows the weather, wind, low-level terrain effects and daytime thermals over land.</p>
       <h3>Units</h3>${this.seg(Object.keys(UNITS).map(u => [u, u[0].toUpperCase() + u.slice(1)]), this.e.settings.get('units'), 'unit')}`;
   }
   w_world() {
@@ -95,6 +99,7 @@ export class Menu {
     bind('f-hour', v => env.hour = v, v => `${String(v).padStart(2, '0')}:00`); bind('f-ws', v => env.wind.speed = v, v => `${Math.round(v * sk)} ${sl}`); bind('f-wd', v => env.wind.from = v, v => `${String(v).padStart(3, '0')}\u00b0`);
     b.querySelectorAll('[data-hour]').forEach(x => x.onclick = () => { env.hour = +x.dataset.hour; env.apply(); this.render(); });
     b.querySelectorAll('[data-wx]').forEach(x => x.onclick = () => { env.weather = x.dataset.wx; env.apply(); this.render(); });
+    b.querySelectorAll('[data-turb]').forEach(x => x.onclick = () => { env.turbulence = x.dataset.turb; this.render(); });
     b.querySelectorAll('[data-unit]').forEach(x => x.onclick = () => { this.e.settings.set('units', x.dataset.unit, true); this.render(); });
   }
 
@@ -115,11 +120,12 @@ export class Menu {
   r_controls() {
     const s = this.e.settings;
     return `<h2>Controls</h2><p class="lead">Keyboard, gamepad and touch work together.</p>${this.field('f-cs', 'Control sensitivity', 0.4, 1.6, 0.1, s.get('controlSensitivity'), s.get('controlSensitivity').toFixed(1) + 'x')}
-      ${this.sw('sound', 'Sound')}${this.sw('pauseOnMenu', 'Pause while menu is open')}
+      ${this.field('f-shake', 'Camera shake', 0, 2, 0.1, s.get('cameraShake'), s.get('cameraShake').toFixed(1) + 'x')}
+      ${this.sw('sound', 'Sound')}${this.sw('autoDoors', 'Close doors automatically', 'After you climb into the seat')}${this.sw('cockpitHud', 'Show flight display in cockpit view', 'Off: use the instruments in the panel')}${this.sw('pauseOnMenu', 'Pause while menu is open')}
       <h3>Devices</h3><div class="tiles"><button class="tile" data-act="tilt"><b>Tilt steering</b><span>Phones and tablets</span></button><button class="tile" data-act="tiltInvert"><b>Invert tilt pitch</b><span>If it feels backwards</span></button><button class="tile" data-act="fullscreen"><b>Fullscreen</b><span>Toggle</span></button></div>
       <p class="note">Gamepad: left stick pitch and roll, right stick yaw and throttle, A brake, X gear, LB / RB flaps, B auto flaps, Y camera, Back map, Start menu.</p>`;
   }
-  w_controls() { this.slider('f-cs', 'controlSensitivity', v => v, v => v.toFixed(1) + 'x'); this.wireSwitches(); this.body.querySelectorAll('[data-act]').forEach(b => b.onclick = () => this.e.bus.emit('action', b.dataset.act)); }
+  w_controls() { this.slider('f-cs', 'controlSensitivity', v => v, v => v.toFixed(1) + 'x'); this.slider('f-shake', 'cameraShake', v => v, v => v.toFixed(1) + 'x'); this.wireSwitches(); this.body.querySelectorAll('[data-act]').forEach(b => b.onclick = () => this.e.bus.emit('action', b.dataset.act)); }
 
   // ---- Keys
   r_help() { return `<h2>Keys</h2><p class="lead">Everything here is also in the Flight, Camera and World tabs.</p>${KEYS.map(([g, rows]) => `<h3>${g}</h3><div class="keys">${rows.map(([k, d]) => `<div><span>${d}</span><kbd>${k}</kbd></div>`).join('')}</div>`).join('')}`; }

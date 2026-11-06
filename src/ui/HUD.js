@@ -2,6 +2,7 @@ import { UNITS } from '../config/units.js';
 import { PFD } from './PFD.js';
 import { flapSpeeds } from '../aircraft/FlapLogic.js';
 import { CAMERA_MODES } from '../camera/CameraManager.js';
+import { instrumentState } from '../instruments/state.js';
 
 const ICON_MENU = '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
 const TEMPLATE = `
@@ -21,7 +22,7 @@ const TEMPLATE = `
   <div class="row"><label>Gear</label><div class="lamps"><i></i><i></i><i></i></div><b id="gearTxt" class="num"></b></div>
   <div id="chips"></div>
 </div>
-<div id="dock"><div id="alerts"></div><div id="guide" hidden></div><canvas id="pfd"></canvas></div>`;
+<div id="dock"><div id="alerts"></div><button id="prompt" class="glass" type="button" hidden><kbd>E</kbd><span></span></button><div id="footInfo" class="glass" hidden></div><div id="guide" hidden></div><canvas id="pfd"></canvas></div>`;
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const WARN = /destroy|damage|lost|separated|overspeed|cannot|over cargo|no vehicle|denied|stop the|first|empty|nothing/i;
 
@@ -33,7 +34,7 @@ export class HUD {
     root.insertAdjacentHTML('afterbegin', TEMPLATE); // append, never overwrite: MapUI / TouchControls already added their elements
     const $ = s => root.querySelector(s); this.$ = $;
     this.pfd = new PFD($('#pfd')); this.ladder = $('#ladder'); this.flapMode = $('#flapMode');
-    this.flapMode.onclick = () => e.bus.emit('action', 'flapsAuto'); $('#camBtn').onclick = () => e.bus.emit('action', 'camera'); $('#menuBtn').onclick = () => e.bus.emit('action', 'menu');
+    this.flapMode.onclick = () => e.bus.emit('action', 'flapsAuto'); $('#prompt').onclick = () => e.bus.emit('action', 'interact'); $('#camBtn').onclick = () => e.bus.emit('action', 'camera'); $('#menuBtn').onclick = () => e.bus.emit('action', 'menu');
     e.bus.on('hud:message', m => this.toast(m));
     e.bus.on('aircraft:impact', ({ speed }) => this.toast(`Touchdown: ${speed.toFixed(1)} m/s sink`));
     e.bus.on('action', a => { if (a === 'hud') { this.mode = (this.mode + 1) % 3; document.body.classList.toggle('hud-min', this.mode === 1); document.body.classList.toggle('hud-off', this.mode === 2); } });
@@ -53,10 +54,9 @@ export class HUD {
     const e = this.e, a = e.aircraft.player; if (!a) return;
     const un = e.settings.get('units'), U = UNITS[un], [sl, sk] = U.speed, [al, ak] = U.alt, [vl, vk] = U.vs, f = a.def.flight, c = a.controls, t = a.telemetry, w = e.world, env = e.env;
     if (this.defId !== a.def.id) this.buildLadder(a.def);
-    const hdgv = this._f ??= a.pos.clone(); hdgv.set(0, 0, -1).applyQuaternion(a.quat);
-    const hdg = (Math.atan2(hdgv.x, -hdgv.z) * 180 / Math.PI + 360) % 360, pitch = Math.asin(Math.max(-1, Math.min(1, hdgv.y)));
-    const rv = this._r ??= hdgv.clone(); rv.set(1, 0, 0).applyQuaternion(a.quat); const uv = this._u ??= hdgv.clone(); uv.set(0, 1, 0).applyQuaternion(a.quat); const roll = Math.atan2(-rv.y, uv.y);
-    const gh = w.groundHeight(a.pos.x, a.pos.z), alt = a.pos.y - f.gearHeight, agl = alt - gh, V = t.airspeed, sp = flapSpeeds(a.def, a.mass), cur = c.flapIndex;
+    const S = instrumentState(e, a, this.S ??= {}), hdg = S.hdg, pitch = S.pitch, roll = S.roll, gh = S.alt - S.agl, alt = S.alt, agl = S.agl, V = t.airspeed, sp = { vs0: S.bands.vs0, vs1: S.bands.vs1, vfe: S.bands.vfe }, cur = c.flapIndex, walk = e.walk;
+    const mode = walk.mode, cam = e.cameras, seatedView = mode === 'aircraft', cockpitView = cam.inside && !e.settings.get('cockpitHud');
+    const B = document.body.classList; B.toggle('on-foot', mode === 'foot'); B.toggle('in-vehicle', mode === 'vehicle'); B.toggle('cockpit-view', cockpitView);
 
     // identity + environment
     const [nm, role] = a.def.name.replace(')', '').split(' ('); this.set('acName', nm); this.set('acRole', role || ''); this.set('acLivery', a.def.liveries[a.livery].name);
@@ -78,6 +78,9 @@ export class HUD {
     const chips = []; if (c.spoiler) chips.push(['Spoilers', 'on']); if (c.reverse) chips.push(['Reverse', 'warn']); if (c.brake > 0.1) chips.push(['Brakes', 'warn']); if (c.autobrake) chips.push(['Autobrake', 'on']); if (c.lights) chips.push(['Strobes', 'on']);
     if (a.jatoLeft > 0) chips.push([`JATO ${Math.ceil(a.jatoLeft)}s`, 'warn']);
     if (a.def.cargo) { if (a.rampPos > 0.02) chips.push([`Ramp ${Math.round(a.rampPos * 100)}%`, 'cyan']); chips.push([`Cargo ${a.bay.length} \u00b7 ${Math.round(a.mass - f.mass)} kg`, '']); }
+    if (a.onGround && a.surface && a.surface !== 'asphalt') chips.push([a.surface[0].toUpperCase() + a.surface.slice(1), 'warn']);
+    if (a.mesh.userData.parts.doors.some(d => d.pos > 0.05)) chips.push(['Door open', 'warn']);
+    if (env.turbulence !== 'off' && env.intensity > 0.8) chips.push([`Turbulence: ${env.turbLabel().toLowerCase()}`, 'warn']);
     if (e.cargo.driven) chips.push(['Driving - Enter to exit', 'cyan']);
     const sig = chips.map(x => x.join('|')).join(';'); if (sig !== this.chipSig) { this.chipSig = sig; this.$('#chips').innerHTML = chips.map(([l, k]) => `<span class="chip ${k}">${l}</span>`).join(''); }
 
@@ -90,12 +93,19 @@ export class HUD {
       if (!a.onGround && !c.gearDown && agl < 120 && V < sp.vs1 * 1.5 && c.throttle < 0.5) al2.push(['Gear not down', 'amber', 0]);
       if (cur > 0 && V > sp.vfe[cur]) al2.push(['Flap overspeed', 'amber', 0]);
       if (a.gearDamaged) al2.push(['Gear damaged', 'amber', 0]);
+      if (seatedView && a.mesh.userData.parts.doors.some(d => d.pos > 0.05) && (c.throttle > 0.4 || !a.onGround)) al2.push(['Door open', 'amber', 0]);
+      if (seatedView && env.intensity > 1.6 && !a.onGround) al2.push(['Severe turbulence', 'amber', 0]);
     }
     const asig = al2.map(x => x.join('|')).join(';'); if (asig !== this.alertSig) { this.alertSig = asig; this.$('#alerts').innerHTML = al2.map(([m, k, fl2]) => `<div class="alert ${k} ${fl2 ? 'flash' : ''}">${m}</div>`).join(''); }
 
     // route guidance
     const gd = e.map.guidance?.(a), gEl = this.$('#guide'); if (gd) { gEl.hidden = false; this.set('guide', `<b>Waypoint ${gd.idx}/${gd.n}</b><span>${(gd.dist * U.dist[1]).toFixed(1)} ${U.dist[0]}</span><span>${String(Math.round(gd.brg)).padStart(3, '0')}\u00b0</span>`, 'innerHTML'); } else gEl.hidden = true;
 
+    // prompt / on-foot + vehicle readouts
+    const pr = walk.prompt, pEl = this.$('#prompt'); pEl.hidden = !pr; if (pr) pEl.querySelector('span').textContent = pr.text;
+    const fi = this.$('#footInfo'); fi.hidden = seatedView;
+    if (mode === 'foot') { const fh = (Math.atan2(-Math.sin(walk.yaw), -Math.cos(walk.yaw)) * 180 / Math.PI + 360) % 360; this.set('footInfo', `On foot <b>${String(Math.round(fh)).padStart(3, '0')}\u00b0</b><span>${Math.round(walk.speed * 3.6)} km/h</span>${walk.inside ? '<span>Aboard</span>' : `<span>${walk.surface === 'hard' ? 'Hard ground' : walk.surface[0].toUpperCase() + walk.surface.slice(1)}</span>`}`, 'innerHTML'); }
+    else if (mode === 'vehicle' && e.cargo.driven) { const v = e.cargo.driven, sf = e.world.surfaceAt(v.pos.x, v.pos.z); this.set('footInfo', `${v.name} <b>${Math.round(Math.abs(v.speed) * U.speed[1] * (U.speed[0] === 'kt' ? 1 : 1))} ${U.speed[0]}</b><span>${sf.label}</span>`, 'innerHTML'); }
     // PFD
     const vs = a.vel.y, vsv = vs * vk;
     this.pfd.draw({ pitch, roll, hdg, spd: V, spdUnit: sl, spdK: sk, gs: Math.hypot(a.vel.x, a.vel.z), alt, altUnit: al, altK: ak, agl, vs, vsText: `${vsv >= 0 ? '+' : '-'}${vl === 'm/s' ? Math.abs(vsv).toFixed(1) : Math.abs(Math.round(vsv))} ${vl}`,
