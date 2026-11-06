@@ -1,7 +1,8 @@
 const MAP = { KeyG: 'gear', KeyF: 'flapsDown', KeyV: 'flapsUp', KeyO: 'spoiler', KeyR: 'reverse', KeyL: 'lights',
   KeyC: 'camera', KeyT: 'time', KeyU: 'units', KeyH: 'help', Tab: 'nextAircraft', KeyN: 'nextLivery',
   BracketRight: 'windUp', BracketLeft: 'windDown', KeyY: 'windTurn', KeyM: 'weather', Backspace: 'reset',
-  KeyI: 'ramp', KeyK: 'cargo', Enter: 'drive', KeyJ: 'jato', KeyB: 'autobrake', KeyP: 'map', Digit0: 'mute', Digit1: 'tilt', Digit2: 'clearRoute', Digit3: 'fullscreen' };
+  KeyI: 'ramp', KeyK: 'cargo', Enter: 'drive', KeyJ: 'jato', KeyB: 'autobrake', KeyP: 'map', Digit0: 'mute', Digit1: 'tilt', Digit2: 'clearRoute', Digit3: 'fullscreen',
+  Digit4: 'flapsAuto', Digit5: 'cameraReset', Digit9: 'hud', Escape: 'menu' };
 
 /** IInputSource: W/S pitch, A/D roll, Q/E yaw, Z/X throttle, Space brake. */
 export class KeyboardInput {
@@ -9,9 +10,10 @@ export class KeyboardInput {
   init(bus) {
     addEventListener('keydown', e => {
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'Backspace'].includes(e.code)) e.preventDefault();
+      if (document.body.classList.contains('menu-open') && e.code !== 'Escape') return; // menu has focus
       if (e.repeat) return; this.k.add(e.code); if (MAP[e.code]) bus.emit('action', MAP[e.code]);
     });
-    addEventListener('keyup', e => this.k.delete(e.code));
+    addEventListener('keyup', e => this.k.delete(e.code)); addEventListener('blur', () => this.k.clear());
   }
   poll(dt) {
     const d = (...c) => c.some(x => this.k.has(x)) ? 1 : 0;

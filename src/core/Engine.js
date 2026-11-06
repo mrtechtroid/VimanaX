@@ -6,7 +6,7 @@ export class Engine {
   constructor(canvas) {
     this.bus = new EventBus();
     this.modules = [];
-    this.time = 0;
+    this.time = 0; this.paused = false; // paused: only modules with `alwaysUpdate` run (camera, UI)
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.3, 40000);
@@ -22,8 +22,8 @@ export class Engine {
   start() {
     let last = performance.now();
     const loop = now => {
-      const dt = Math.min(0.05, (now - last) / 1000); last = now; this.time += dt;
-      for (const m of this.modules) m.update?.(dt, this);
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; if (!this.paused) this.time += dt;
+      for (const m of this.modules) if (!this.paused || m.alwaysUpdate) m.update?.(dt, this);
       this.renderer.render(this.scene, this.camera);
       requestAnimationFrame(loop);
     };

@@ -12,6 +12,6 @@ const spec = {
 export default {
   id: 'light-prop', name: 'Skylark 172 (light prop)', role: 'civil-light', flight, flaps: [0, 0.33, 0.66, 1],
   liveries: [{ name: 'White/Blue', body: 0xf2f2f2, accent: 0x1c4fa0 }, { name: 'Yellow/Black', body: 0xf5c518, accent: 0x222222 }, { name: 'Red', body: 0xc62828, accent: 0xeeeeee }],
-  camera: { chaseDist: 14, chaseHeight: 4, eye: { x: 0, y: 0.3, z: -1.0 } },
+  camera: { chaseDist: 14, chaseHeight: 4, eye: { x: 0, y: 0.3, z: -1.0 }, wing: { x: -4.6, y: 0.9, z: 0.4, look: { x: 0, y: 0.5, z: 1.2 } } },
   buildMesh: l => buildAirframe(spec, l),
 };

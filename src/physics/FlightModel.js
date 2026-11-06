@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 const G = 9.81, { clamp } = THREE.MathUtils;
-const _n = new THREE.Vector3(), _v = new THREE.Vector3(), _f = new THREE.Vector3(), _fw = new THREE.Vector3(), _rt = new THREE.Vector3();
+const _n = new THREE.Vector3(), _v = new THREE.Vector3(), _f = new THREE.Vector3(), _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _l = new THREE.Vector3(), _vh = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _dq = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
 /** IFlightModel: point-mass + body-rate model with aero (lift/drag/stall), control surfaces, gear/ground contact. */
@@ -22,7 +22,10 @@ export class FlightModel {
     if (ac.jatoLeft > 0) { thrust += f.jato.thrust; ac.jatoLeft -= dt; }
     if (c.reverse && ac.onGround) thrust *= -f.reverseFactor;
 
-    _f.set(-beta * dyn * S * 0.8, dyn * S * cl, -thrust);
+    // Lift acts perpendicular to the relative wind (not along body-up), otherwise it leaks backwards as phantom drag at high AoA.
+    _l.set(0, 1, 0);
+    if (moving) { _vh.copy(vb).divideScalar(V); _l.addScaledVector(_vh, -_vh.y); if (_l.lengthSq() > 1e-6) _l.normalize(); else _l.set(0, 1, 0); }
+    _f.set(-beta * dyn * S * 0.8, 0, -thrust).addScaledVector(_l, dyn * S * cl);
     if (moving) _f.addScaledVector(vb, -dyn * S * cd / V);
     _f.applyQuaternion(q); _f.y -= ac.mass * G;
 

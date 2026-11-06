@@ -18,6 +18,6 @@ export default {
   id: 'transport', name: 'Atlas T4 (military transport)', role: 'military-transport', flight, flaps: [0, 0.4, 0.7, 1],
   liveries: [{ name: 'Grey', body: 0x8a9096, accent: 0x5c6268 }, { name: 'Olive', body: 0x5f6b3a, accent: 0x3e4726 }],
   cargo: { maxMass: 12000, rampDist: 20 },
-  camera: { chaseDist: 55, chaseHeight: 16, eye: { x: 0, y: 1.0, z: -13 } },
+  camera: { chaseDist: 55, chaseHeight: 16, eye: { x: 0, y: 1.0, z: -13 }, wing: { x: -17, y: 3.2, z: 1.5, look: { x: 0, y: 1.5, z: 5 } } },
   buildMesh: l => buildAirframe(spec, l),
 };

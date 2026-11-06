@@ -15,6 +15,7 @@ import { AudioSystem } from './systems/AudioSystem.js';
 import { CameraManager } from './camera/CameraManager.js';
 import { MapUI } from './ui/MapUI.js';
 import { HUD } from './ui/HUD.js';
+import { Menu } from './ui/Menu.js';
 
 // Composition root: swap/add modules here. Update order = registration order.
 const engine = new Engine(document.getElementById('view'));
@@ -31,7 +32,9 @@ engine
   .use('map', new MapUI())
   .use('touch', new TouchControls())
   .use('audio', new AudioSystem())
-  .use('hud', new HUD());
+  .use('hud', new HUD())
+  .use('menu', new Menu());
 
 engine.aircraft.player = engine.aircraft.spawn('light-prop', 0, 'main');
 engine.start();
+window.engine = engine; // handy in the console: engine.aircraft.player, engine.cameras.set('flyby') ...

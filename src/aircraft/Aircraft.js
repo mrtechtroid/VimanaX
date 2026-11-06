@@ -6,9 +6,9 @@ export class Aircraft {
   constructor(def, livery = 0) {
     this.def = def; this.livery = livery; this.bus = null;
     this.pos = new THREE.Vector3(); this.quat = new THREE.Quaternion(); this.vel = new THREE.Vector3(); this.angVel = new THREE.Vector3();
-    this.controls = { pitch: 0, roll: 0, yaw: 0, throttle: 0, brake: 0, flapIndex: 0, gearDown: true, spoiler: 0, reverse: false, lights: false, rampOpen: false, autobrake: false };
+    this.controls = { pitch: 0, roll: 0, yaw: 0, throttle: 0, brake: 0, flapIndex: 0, flapAuto: true, gearDown: true, spoiler: 0, reverse: false, lights: false, rampOpen: false, autobrake: false };
     this.mass = def.flight.mass; this.eff = { pitch: 1, roll: 1, yaw: 1 }; this.rollBias = 0; this.liftScale = 1; this.jatoLeft = 0; this.rampPos = 0;
-    this.destroyed = false; this.gearDamaged = false; this.bay = []; this.flapPos = 0; this.gearPos = 1; this.onGround = true; this.telemetry = { airspeed: 0, aoa: 0, cl: 0 };
+    this.destroyed = false; this.gearDamaged = false; this.bay = []; this.flapPos = 0; this.flapTimer = 0; this.flapReason = ''; this.gearPos = 1; this.onGround = true; this.telemetry = { airspeed: 0, aoa: 0, cl: 0 };
     this.mesh = def.buildMesh(def.liveries[livery]);
   }
   place(x, y, z, heading) {
