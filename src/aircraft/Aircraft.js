@@ -6,8 +6,9 @@ export class Aircraft {
   constructor(def, livery = 0) {
     this.def = def; this.livery = livery; this.bus = null;
     this.pos = new THREE.Vector3(); this.quat = new THREE.Quaternion(); this.vel = new THREE.Vector3(); this.angVel = new THREE.Vector3();
-    this.controls = { pitch: 0, roll: 0, yaw: 0, throttle: 0, brake: 0, flapIndex: 0, gearDown: true, spoiler: 0, reverse: false, lights: false };
-    this.flapPos = 0; this.gearPos = 1; this.onGround = true; this.telemetry = { airspeed: 0, aoa: 0, cl: 0 };
+    this.controls = { pitch: 0, roll: 0, yaw: 0, throttle: 0, brake: 0, flapIndex: 0, gearDown: true, spoiler: 0, reverse: false, lights: false, rampOpen: false, autobrake: false };
+    this.mass = def.flight.mass; this.eff = { pitch: 1, roll: 1, yaw: 1 }; this.rollBias = 0; this.liftScale = 1; this.jatoLeft = 0; this.rampPos = 0;
+    this.destroyed = false; this.gearDamaged = false; this.bay = []; this.flapPos = 0; this.gearPos = 1; this.onGround = true; this.telemetry = { airspeed: 0, aoa: 0, cl: 0 };
     this.mesh = def.buildMesh(def.liveries[livery]);
   }
   place(x, y, z, heading) {
@@ -25,6 +26,7 @@ export class Aircraft {
     P.flaps.forEach(m => m.rotation.x = this.flapPos * 0.7);
     P.gear.forEach(g => g.scale.y = Math.max(0.001, this.gearPos));
     P.props.forEach(p => p.rotation.z += (8 + c.throttle * 60) * dt);
+    if (P.ramp) { this.rampPos = approach(this.rampPos, c.rampOpen ? 1 : 0, dt / 3); P.ramp.rotation.x = -1.4 + 1.75 * this.rampPos; }
     P.strobes.forEach(s => s.visible = c.lights && (time * 1.5) % 1 < 0.12);
     this.syncMesh();
   }

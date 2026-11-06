@@ -7,7 +7,10 @@ G gear  F/V flaps  O spoilers
 R reverse  L strobes
 C camera  Tab aircraft  N livery
 T time  M weather  [ ] wind  Y dir
-U units  Backspace reset  H help`;
+U units  Backspace reset  H help
+I ramp  K cargo/airdrop  Enter drive
+J JATO  B autobrake  P map  0 sound
+1 tilt  2 clear route  3 fullscreen`;
 
 /** DOM HUD: telemetry, toast messages (bus 'hud:message'), help panel. */
 export class HUD {
@@ -26,5 +29,7 @@ export class HUD {
     const hdg = (Math.atan2(_v.x, -_v.z) * 180 / Math.PI + 360) % 360;
     const gear = a.gearPos > 0.99 ? 'DOWN' : a.gearPos < 0.01 ? 'UP' : 'MOVING';
     this.tele.textContent = `${a.def.name}\nSPD ${fmt(u, 'speed', t.airspeed)}   ALT ${fmt(u, 'alt', a.pos.y - f.gearHeight)}\nV/S ${fmt(u, 'vs', a.vel.y)}   HDG ${String(Math.round(hdg)).padStart(3, '0')}°\nTHR ${Math.round(c.throttle * 100)}%${c.reverse ? ' REV' : ''}   FLAPS ${Math.round(a.flapPos * 100)}%   GEAR ${gear}${c.spoiler ? '   SPOILERS' : ''}\n${a.onGround ? 'ON GROUND' : ''}${Math.abs(t.aoa) > f.aoaStall ? '  *** STALL ***' : ''}\n${this.e.env.describe(v => fmt(u, 'speed', v))}`;
+    const x = [this.e.map.info(a, u), a.def.cargo ? `CARGO ${a.bay.length} (${Math.round(a.mass - f.mass)} kg)  RAMP ${Math.round(a.rampPos * 100)}%` : '', c.autobrake ? 'AUTOBRAKE' : '', a.jatoLeft > 0 ? `JATO ${a.jatoLeft.toFixed(0)}s` : '', a.destroyed ? '*** DESTROYED - Backspace ***' : '', this.e.cargo.driven ? 'DRIVING - Enter to exit' : ''].filter(Boolean).join('\n');
+    if (x) this.tele.textContent += '\n' + x;
   }
 }

@@ -1,6 +1,7 @@
 const MAP = { KeyG: 'gear', KeyF: 'flapsDown', KeyV: 'flapsUp', KeyO: 'spoiler', KeyR: 'reverse', KeyL: 'lights',
   KeyC: 'camera', KeyT: 'time', KeyU: 'units', KeyH: 'help', Tab: 'nextAircraft', KeyN: 'nextLivery',
-  BracketRight: 'windUp', BracketLeft: 'windDown', KeyY: 'windTurn', KeyM: 'weather', Backspace: 'reset' };
+  BracketRight: 'windUp', BracketLeft: 'windDown', KeyY: 'windTurn', KeyM: 'weather', Backspace: 'reset',
+  KeyI: 'ramp', KeyK: 'cargo', Enter: 'drive', KeyJ: 'jato', KeyB: 'autobrake', KeyP: 'map', Digit0: 'mute', Digit1: 'tilt', Digit2: 'clearRoute', Digit3: 'fullscreen' };
 
 /** IInputSource: W/S pitch, A/D roll, Q/E yaw, Z/X throttle, Space brake. */
 export class KeyboardInput {

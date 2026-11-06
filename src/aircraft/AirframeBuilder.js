@@ -6,34 +6,35 @@ const at = (o, x, y, z) => { o.position.set(x, y, z); return o; };
 function hinged(parent, x, y, z, w, h, d, m) { const p = new THREE.Group(); p.position.set(x, y, z); p.add(at(box(w, h, d, m), 0, 0, d / 2)); parent.add(p); return p; }
 
 /**
- * Procedural airframe from a spec (fuselage, wing, tail, engines, gear). Reuse for any conventional aircraft;
- * write a different builder (or load a glTF) for exotic ones (tilt-wing, seaplane floats) - only `userData.parts` matters.
+ * Procedural airframe from a spec. parts: wings[2] and tail are detachable groups (damage), ramp optional (cargo).
+ * Write a different builder (or load a glTF) for exotic aircraft - only `userData.parts` matters.
  */
 export function buildAirframe(s, l) {
-  const g = new THREE.Group(), P = { aileronL: null, aileronR: null, elevator: null, rudder: null, flaps: [], gear: [], props: [], strobes: [] };
+  const g = new THREE.Group(), P = { aileronL: null, aileronR: null, elevator: null, rudder: null, wings: [], tail: null, ramp: null, flaps: [], gear: [], props: [], strobes: [] };
   const body = mat(l.body), acc = mat(l.accent), dark = mat(0x2a2a2a), white = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const { fuselage: F, wing: W, tail: T } = s, wy = F.radius * 0.8, half = W.span / 2;
+  const { fuselage: F, wing: W, tail: T } = s, wy = F.radius * 0.8, half = W.span / 2, strobe = () => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.18), white); m.visible = false; P.strobes.push(m); return m; };
   const fus = new THREE.Mesh(new THREE.CapsuleGeometry(F.radius, F.length, 6, 12), body); fus.rotation.x = Math.PI / 2; g.add(fus);
-  g.add(at(box(W.span, 0.15, W.chord, body), 0, wy, W.z));
   const hz = W.z + W.chord * 0.25, sd = W.chord * 0.25;
   for (const sg of [-1, 1]) {
-    P.flaps.push(hinged(g, sg * half * 0.35, wy, hz, half * 0.4, 0.17, sd, acc));
-    const a = hinged(g, sg * half * 0.78, wy, hz, half * 0.35, 0.17, sd, acc); if (sg < 0) P.aileronL = a; else P.aileronR = a;
-    P.strobes.push(at(new THREE.Mesh(new THREE.SphereGeometry(0.18), white), sg * half, wy, W.z + W.chord / 2));
+    const wg = new THREE.Group(); g.add(wg); P.wings.push(wg);
+    wg.add(at(box(half, 0.15, W.chord, body), sg * half / 2, wy, W.z));
+    P.flaps.push(hinged(wg, sg * half * 0.35, wy, hz, half * 0.4, 0.17, sd, acc));
+    const a = hinged(wg, sg * half * 0.78, wy, hz, half * 0.35, 0.17, sd, acc); if (sg < 0) P.aileronL = a; else P.aileronR = a;
+    wg.add(at(strobe(), sg * half, wy, W.z + W.chord / 2));
   }
-  g.add(at(box(T.hSpan, 0.1, T.hChord, body), 0, T.y, T.z));
-  P.elevator = hinged(g, 0, T.y, T.z + T.hChord * 0.15, T.hSpan * 0.9, 0.12, T.hChord * 0.35, acc);
-  const vb = T.vBase ?? T.y;
-  g.add(at(box(0.12, T.vHeight, T.vChord, body), 0, vb + T.vHeight / 2, T.z));
-  P.rudder = hinged(g, 0, vb + T.vHeight / 2, T.z + T.vChord * 0.15, 0.14, T.vHeight * 0.9, T.vChord * 0.35, acc);
-  P.strobes.push(at(new THREE.Mesh(new THREE.SphereGeometry(0.18), white), 0, vb + T.vHeight, T.z + T.vChord / 2));
-  P.strobes.forEach(m => { m.visible = false; g.add(m); });
+  const tl = new THREE.Group(); g.add(tl); P.tail = tl; const vb = T.vBase ?? T.y;
+  tl.add(at(box(T.hSpan, 0.1, T.hChord, body), 0, T.y, T.z));
+  P.elevator = hinged(tl, 0, T.y, T.z + T.hChord * 0.15, T.hSpan * 0.9, 0.12, T.hChord * 0.35, acc);
+  tl.add(at(box(0.12, T.vHeight, T.vChord, body), 0, vb + T.vHeight / 2, T.z));
+  P.rudder = hinged(tl, 0, vb + T.vHeight / 2, T.z + T.vChord * 0.15, 0.14, T.vHeight * 0.9, T.vChord * 0.35, acc);
+  tl.add(at(strobe(), 0, vb + T.vHeight, T.z + T.vChord / 2));
   for (const e of s.engines) {
     const n = new THREE.Mesh(new THREE.CapsuleGeometry(e.radius, e.length, 4, 8), dark); n.rotation.x = Math.PI / 2; g.add(at(n, e.x, e.y, e.z));
     const pr = new THREE.Group(); pr.position.set(e.x, e.y, e.z - e.length / 2 - e.radius - 0.05);
     for (let i = 0; i < e.blades; i++) { const b = new THREE.Group(); b.rotation.z = i * 2 * Math.PI / e.blades; b.add(at(box(0.14, e.propR, 0.03, dark), 0, e.propR / 2, 0)); pr.add(b); }
     g.add(pr); P.props.push(pr);
   }
+  if (s.ramp) { const r = new THREE.Group(); r.position.set(0, -F.radius * 0.45, F.length / 2 + F.radius - 0.2); r.rotation.x = -1.4; r.add(at(box(s.ramp.w, 0.12, s.ramp.len, dark), 0, 0, s.ramp.len / 2)); g.add(r); P.ramp = r; }
   const wr = s.wheelRadius, y0 = -F.radius * 0.6, drop = s.gearHeight + y0;
   for (const p of s.gear) {
     const gr = new THREE.Group(); gr.position.set(p.x, y0, p.z);
