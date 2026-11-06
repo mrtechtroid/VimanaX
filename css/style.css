@@ -1,0 +1,8 @@
+html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:ui-monospace,Menlo,Consolas,monospace}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud{position:fixed;inset:0;pointer-events:none;color:#eaf4ff;text-shadow:0 1px 3px #000}
+#hud pre{margin:0;font:13px/1.5 inherit;white-space:pre-wrap}
+#tele{position:absolute;left:14px;top:12px;background:rgba(8,16,28,.55);padding:8px 12px;border-left:3px solid #ffb43c}
+#help{position:absolute;right:14px;top:12px;background:rgba(8,16,28,.55);padding:8px 12px;font-size:12px}
+#msg{position:absolute;left:50%;bottom:48px;transform:translateX(-50%);font-size:15px;opacity:0;transition:opacity .3s}
+#msg.on{opacity:1}
