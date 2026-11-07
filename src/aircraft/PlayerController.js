@@ -26,6 +26,7 @@ export class PlayerController {
     if (!seated || this.e.cargo.driven) return void Object.assign(p.controls, { pitch: 0, roll: 0, yaw: 0, throttle: 0, brake: 1, spoiler: p.controls.spoiler, reverse: false }); // parked: pilot is out of the seat
     p.controls.flapAuto = this.e.settings.get('autoFlaps'); updateFlaps(p, dt, this.e.world, m => this.e.bus.emit('hud:message', m));
     Object.assign(p.controls, { pitch: s.pitch, roll: s.roll, yaw: s.yaw, throttle: s.throttle, brake: s.brake });
+    this.e.autopilot?.apply(p, s, dt);
     if (p.controls.autobrake && p.onGround && p.vel.length() > 2 && s.throttle < 0.05) p.controls.brake = Math.max(p.controls.brake, 0.8);
   }
 }

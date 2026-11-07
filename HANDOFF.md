@@ -1,10 +1,29 @@
-# HANDOFF - Open Flight Engine (v0.3, "realism pass")
+# HANDOFF - Open Flight Engine (v0.4, "new world + real aircraft")
 
 Browser 3D flight simulator / generalised engine. three.js r160 (CDN import map incl. `three/addons/`), plain ES modules, **no build step**.
 Run: `python3 -m http.server 8000` in this folder, open http://localhost:8000 (`?touch` forces the mobile UI).
 Tests (optional, headless): `npm install && npm test` (flap logic, full-app boot in jsdom, on-foot/vehicle/world). `npm run preview` renders the procedural models and gauges to /tmp/shots as PNGs.
 
 > **Status.** Everything below was exercised headlessly: real FlightModel runs, the whole app booting in jsdom with only `WebGLRenderer` stubbed, software-rendered previews of the models and instruments. **It has never been opened in a real browser.** WebGL shaders (sky dome, clouds), glTF/Draco loading, pointer lock, real CSS layout and audio are unverified. Section 4 lists what to check first.
+
+## 0. What is new in v0.4 (read this first)
+**World (`src/world/`)**: the circle-islands world is gone. `Terrain.js` builds a 1025x1025 height grid (23 m cells, 24 km square, seeded) in ~1.3 s: domain-warped island masks
+(irregular coasts), ridged mountains, hills and micro relief, islets, lakes (own water level, carved bowls), **rivers** (steepest-descent paths from the highlands that reach the sea,
+smoothed and carved with widening beds), airport lowlands + plateaus, and snapped towns. It is pure data (no THREE): `heightAt/slopeAt/forestAt/fieldAt/waterLevelAt/surfaceId/mapRaster`.
+`TerrainRenderer.js` streams 16x16 chunks with 4 LODs (64/32/16/8 cells) plus skirts, bakes biome colours per vertex (bathymetry + foam, beach, grass, farmland patchwork, forest, rock, scree, snow),
+adds a tiled detail texture, a translucent sea with scrolling wave normals over a dark floor, lake discs, river ribbons and instanced conifer/broadleaf forests (queued one chunk per frame).
+`Scenery.js` places towns (instanced houses with roofs, tower blocks, street crosses) and routes roads between towns and airports. `Airports.js` builds runways with real markings, parallel taxiways,
+aprons, terminal/tower/hangars/fuel tanks, windsocks, PAPI and approach lights; it also provides the paved-area layout that `World.surfaceAt` uses (taxiway/apron = asphalt). `World.js` keeps the old API
+(`heightAt`, `groundHeight` incl. lake/sea level, `surfaceAt`, `isWater`, `spawnPoint`, `cfg`) and adds `terrain`, `mapRaster`, `bounds`. `MapUI` draws the raster and town names.
+Airports: Main Intl runway is now 2300 m (the 737 needs it); new North Landing, Coral Bay, Cape Grass Strip and the Harmony Bay water aerodrome (`water: true`).
+
+**Aircraft**: `src/aircraft/GltfSkin.js` is the long-missing glTF hook. A definition adds `model: { id, pos, parts, lights }`; node names are re-parented under hinge pivots so the existing
+`Aircraft.animate()` drives them. The procedural cockpit/physics always remain; the procedural exterior is hidden once the glTF is in. New aircraft in `definitions/fr24.js`: Citation II, ATR 42, Boeing 737-800;
+the Skylark wears the PA-28. `light-float` = Skylark on pontoons (`flight.floats`: pontoons plane on water with low drag, belly-slide on land). Models are glTF 1.0 originals converted by `tools/convert-fr24.sh`;
+GPL notes in `assets/CREDITS.md`.
+
+**Systems**: `systems/Autopilot.js` (key 8: altitude/heading/speed hold, controls nudge targets, chip in the HUD). `Settings` persists to localStorage; keys are rebindable (`ui/Rebind.js`, `KeyboardInput.effectiveMap`).
+Tests: `tests/canvas-stub.mjs` gives jsdom a no-op 2D canvas (the `canvas` package does not build everywhere); new `tests/fleet.mjs`, `tests/features.mjs`, `tests/bench-world.mjs`.
 
 ## 1. What is in v0.3
 **On foot (`systems/WalkSystem.js`)**
@@ -61,24 +80,25 @@ Tests (optional, headless): `npm install && npm test` (flap logic, full-app boot
 7. Cloud look and cost (about 1000 instanced puffs, resorted every 0.45 s), fog colour vs sky horizon at dusk, visibility inside cloud.
 8. Turbulence strength per level (`Environment.turbAt` scale; severe is deliberately violent), bump amplitude on grass/dirt.
 9. Menu on a phone; touch walking (stick = walk, drag = look).
-10. Old open items: impact thresholds, tilt axis signs, terrain build time (vertex colouring now calls `surfaceAt` per vertex).
+10. Old open items: impact thresholds, tilt axis signs, terrain build time (v0.4: ~1.3 s heightfield + ~0.4 s first chunks; check on a phone).
 
 ## 5. Not done / known gaps (honest list)
-- **Sample-based audio is NOT done.** `AudioSystem` is still the v0.2 synth. `sfx` events (`door_open|door_close|ramp|step_*`) are already emitted for it. Plan: generate or record loops (engine idle/mid/high, wind, rolling, flap/gear/door/ramp, footsteps per surface, car engine, stall horn), `fetch` + `decodeAudioData`, crossfade layers by RPM with `playbackRate`, interior low-pass when `cameras.inside`.
-- **No glTF hook for aircraft yet.** The aircraft are procedural. The FR24 PA-28 (named nodes: aileronG/D, porteG, helice, roueA/D/G) would be an ideal drop-in but is GPLv2 and glTF 1.0 (needs conversion, e.g. gltf-pipeline); not bundled. A hook would map node names to `userData.parts`.
-- The seated pilot has no body (empty seats); no hands on the yoke. No copilot NPC.
-- Cannot leave the seat in flight and there is no autopilot.
-- Interior walking only in the Atlas (the Skylark cabin is a seat, not a walkable space). No stairs/ladders; no walking on wings.
-- Vehicle steering is not shown on the glTF wheels; GLB cars have no door animation; vehicles do not collide with each other or crates.
-- Clouds are billboards (no volumetric lighting); no precipitation; no cloud shadows on the ground.
-- Surfaces are by terrain height/noise, not painted per tile; water is hard ground for aircraft (no seaplane yet).
-- Settings are not persisted; no key-rebinding UI.
+- **Nothing in v0.4 has been seen in a real browser** (no browser in the build sandbox). Terrain colours/lighting, water look, tree density/performance, model scale/orientation, eye heights and cockpit alignment on the FR24 models are unverified. Headless tests cover logic only.
+- **Sample-based audio is still NOT done.** `AudioSystem` is the v0.2 synth; `sfx` events exist for it. Plan unchanged (loops by RPM, interior low-pass, footsteps per surface).
+- **FR24 model limits:** the Citation, ATR 42 and 737 meshes have the landing gear merged into the fuselage, so gear cannot retract on them (the PA-28 has separate gear nodes and does retract). Engine fans and the 737's spoilers/slats are not animated. The PA-28 stabilator hinge and all `model.pos`/cockpit numbers in `definitions/fr24.js` and `lightProp.js` are estimates from bounding boxes. Doors on glTF skins are invisible (the walk system still uses the procedural door positions, so the pilot steps out through the fuselage). The new jets reuse the glass-cockpit panel with no detailed interior and no cabin.
+- Flight models for the Citation/ATR/737/floatplane are plausible numbers, not tuned against real data (headless takeoff only). Floatplane on water has no wave/spray/porpoising; wheeled aircraft landing on water just meet a very draggy surface.
+- Autopilot: no nav/ILS/approach modes, no coordinated rudder, disengages on touchdown; you still cannot leave the seat in flight.
+- The seated pilot has no body (empty seats); no copilot NPC. Interior walking only in the Atlas.
+- No missions/game modes, no AI aircraft, no SAR/AEW/tilt-wing aircraft. Roads are a greedy router (a few may stop at water or steep ground); towns have no night lights; rivers are visual only (the bed is solid, no water physics).
+- Surfaces are decided by terrain rules, not painted per tile. Clouds are billboards, no precipitation. Vehicles do not collide with each other.
+- GPL: FR24 models are GPLv2-only, the repo is GPLv3. See `assets/CREDITS.md`.
 
 ## 6. Recommended next steps
-1. Open it in a browser and fix section 4 (expect shader/scale/eye-height tuning).
-2. Sample audio (section 5), wired to the existing `sfx` events and to engine RPM/airspeed/surface.
-3. Aircraft glTF hook + convert/ship a real light-aircraft model; seated pilot avatar; autopilot so you can leave the seat in flight.
-4. Water landing + seaplane, passenger airliner, SAR/coastguard, AEW, tilt-wing; mission/game-mode framework; AI aircraft.
+1. Open it in a browser and fix section 4 (new in v0.4: terrain look + frame time on a phone, sea colour vs fog, trees too dense/sparse, model orientation/scale, cockpit eyes on all five airframes, water landing feel).
+2. Sample audio (section 5), wired to the existing `sfx` events and engine RPM/airspeed/surface.
+3. Seated pilot avatar, leave-seat-in-flight (needs the autopilot approach modes first), animate the FR24 doors.
+4. Missions + AI traffic (the airports, roads and towns now give them somewhere to go), SAR/coastguard, tilt-wing.
+5. If you want proper gear on the jets: model or split the gear in Blender, then list the node names in `definitions/fr24.js` (the hook already retracts anything in `parts.gear`).
 
 ## 7. Cheat sheet
 - New aircraft: copy `definitions/lightProp.js`; fill `spec` (stations, windows, doors, wing, tail, engines, gear, optional ramp/bodies/details) and `cockpit`/`walk`/`camera`; register in `definitions/index.js`. Use `npm run preview` to look at it (edit `tests/preview-*.mjs`).

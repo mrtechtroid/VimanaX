@@ -19,6 +19,7 @@ import { CameraManager } from './camera/CameraManager.js';
 import { MapUI } from './ui/MapUI.js';
 import { HUD } from './ui/HUD.js';
 import { Menu } from './ui/Menu.js';
+import { Autopilot } from './systems/Autopilot.js';
 
 // Composition root: swap/add modules here. Update order = registration order.
 const engine = new Engine(document.getElementById('view'));
@@ -31,6 +32,7 @@ engine
   .use('clouds', new Clouds())
   .use('cargo', new CargoSystem())
   .use('walk', new WalkSystem())
+  .use('autopilot', new Autopilot())
   .use('player', new PlayerController())
   .use('aircraft', new AircraftManager(new FlightModel(), aircraftRegistry))
   .use('damage', new DamageSystem())

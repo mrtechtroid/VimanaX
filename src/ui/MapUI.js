@@ -26,6 +26,12 @@ export class MapUI {
     return { idx: this.idx + 1, n: this.route.length, dist: Math.hypot(dx, dz), brg: (Math.atan2(dx, -dz) / D2R + 360) % 360 };
   }
   info(a, units) { const g = this.guidance(a); if (!g) return ''; const [u, f] = UNITS[units].dist; return `WPT ${g.idx}/${g.n}  ${(g.dist * f).toFixed(1)} ${u}  BRG ${String(Math.round(g.brg)).padStart(3, '0')}\u00b0`; }
+  /** One-off canvas of the world raster (bathymetry, relief, rivers) so the map matches the real terrain. */
+  terrainImage(w) {
+    if (this._img !== undefined) return this._img; this._img = null;
+    try { const r = w.mapRaster(768), cv = document.createElement('canvas'); cv.width = r.width; cv.height = r.height; const x = cv.getContext('2d'); if (x && typeof ImageData !== 'undefined') { x.putImageData(new ImageData(r.data, r.width, r.height), 0, 0); this._img = cv; } } catch { /* headless */ }
+    return this._img;
+  }
   update() {
     const e = this.e, a = e.walk.focus, g = this.g, s = this.c.width, big = this.big; if (!a) return;
     if (!this.layoutOk && document.body.classList.contains('compact')) { this.layoutOk = true; this.layout(); }
@@ -36,9 +42,8 @@ export class MapUI {
     const sea = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s * 0.75); sea.addColorStop(0, C.sea1); sea.addColorStop(1, C.sea2); g.fillStyle = sea; g.fillRect(0, 0, s, s);
     g.translate(s / 2, s / 2); if (!big) g.rotate(-h); g.translate(-cx * k, -cz * k); // world metres -> canvas: x = X*k, y = Z*k
     if (big) { g.strokeStyle = C.line; g.lineWidth = 1; const half = e.world.cfg.size / 2; for (let m = -half; m <= half; m += 1000) { g.beginPath(); g.moveTo(m * k, -half * k); g.lineTo(m * k, half * k); g.moveTo(-half * k, m * k); g.lineTo(half * k, m * k); g.stroke(); } }
-    for (const i of e.world.cfg.islands) {
-      for (const [r, col] of [[1.04, C.sand], [0.93, C.land], [0.55, C.hill]]) { g.fillStyle = col; g.beginPath(); g.arc(i.x * k, i.z * k, i.r * r * k, 0, 7); g.fill(); }
-    }
+    const img = this.terrainImage(e.world); if (img) { g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; const sz = e.world.cfg.size * k; g.drawImage(img, -sz / 2, -sz / 2, sz, sz); }
+    if (big) { g.font = FONT(10); g.textAlign = 'center'; for (const t of e.world.terrain.towns) { g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(t.x * k, t.z * k, 3, 0, 7); g.fill(); g.fillStyle = C.txt; g.fillText(t.name, t.x * k, t.z * k + 13); } }
     g.font = FONT(big ? 12 : 9); g.textBaseline = 'middle';
     for (const p of e.world.cfg.airports) {
       const r = p.heading * D2R, dx = Math.sin(r) * p.length / 2 * k, dz = -Math.cos(r) * p.length / 2 * k;

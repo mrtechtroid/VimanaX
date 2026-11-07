@@ -1,3 +1,4 @@
+import { rebindHTML, wireRebind } from './Rebind.js';
 import { UNITS } from '../config/units.js';
 import { flapSpeeds } from '../aircraft/FlapLogic.js';
 import { CAMERA_MODES } from '../camera/CameraManager.js';
@@ -8,7 +9,7 @@ const ROLE = { 'civil-light': 'Light civil', 'military-transport': 'Military tra
 const WEATHER = ['clear', 'cloudy', 'overcast', 'fog'];
 const hex = n => '#' + n.toString(16).padStart(6, '0');
 const KEYS = [
-  ['Flying', [['W S', 'Pitch'], ['A D', 'Roll'], ['Q E', 'Yaw / nose wheel'], ['Z X', 'Throttle up / down'], ['Space', 'Brake'], ['R', 'Thrust reverse'], ['O', 'Spoilers']]],
+  ['Flying', [['W S', 'Pitch'], ['A D', 'Roll'], ['Q E', 'Yaw / nose wheel'], ['Z X', 'Throttle up / down'], ['Space', 'Brake'], ['R', 'Thrust reverse'], ['O', 'Spoilers'], ['8', 'Autopilot (W/S altitude, A/D heading, Z/X speed)']]],
   ['Configuration', [['G', 'Landing gear'], ['4', 'Auto flaps on / off'], ['F V', 'Flaps down / up (manual)'], ['B', 'Autobrake'], ['L', 'Strobes'], ['J', 'JATO'], ['6', 'Open / close nearest door']]],
   ['On foot and vehicles', [['Enter', 'Stand up from seat / leave vehicle'], ['E', 'Interact (doors, seats, vehicles, ramp) on foot'], ['W A S D', 'Walk / drive'], ['Shift', 'Sprint'], ['Space', 'Jump (brake in a vehicle)'], ['Mouse', 'Look (click view to capture)'], ['C', 'First / third person']]],
   ['Cargo', [['I', 'Cargo ramp'], ['K', 'Load / unload / airdrop'], ['Drive up the ramp', 'Secures a vehicle in the bay']]],
@@ -128,5 +129,6 @@ export class Menu {
   w_controls() { this.slider('f-cs', 'controlSensitivity', v => v, v => v.toFixed(1) + 'x'); this.slider('f-shake', 'cameraShake', v => v, v => v.toFixed(1) + 'x'); this.wireSwitches(); this.body.querySelectorAll('[data-act]').forEach(b => b.onclick = () => this.e.bus.emit('action', b.dataset.act)); }
 
   // ---- Keys
-  r_help() { return `<h2>Keys</h2><p class="lead">Everything here is also in the Flight, Camera and World tabs.</p>${KEYS.map(([g, rows]) => `<h3>${g}</h3><div class="keys">${rows.map(([k, d]) => `<div><span>${d}</span><kbd>${k}</kbd></div>`).join('')}</div>`).join('')}`; }
+  w_help() { wireRebind(this.body, this.e, () => this.render()); }
+  r_help() { return `<h2>Keys</h2><p class="lead">Everything here is also in the Flight, Camera and World tabs.</p>${KEYS.map(([g, rows]) => `<h3>${g}</h3><div class="keys">${rows.map(([k, d]) => `<div><span>${d}</span><kbd>${k}</kbd></div>`).join('')}</div>`).join('')}${rebindHTML(this.e.settings)}`; }
 }

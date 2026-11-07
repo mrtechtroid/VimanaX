@@ -1,3 +1,4 @@
+import { skinAircraft } from './GltfSkin.js';
 import { Aircraft } from './Aircraft.js';
 
 /** Spawns/updates aircraft using an injected IFlightModel and aircraft Registry. engine.aircraft.player = controlled one. */
@@ -15,7 +16,7 @@ export class AircraftManager {
   spawn(id, livery = 0, airport) {
     const def = this.registry.get(id), ac = new Aircraft(def, livery), w = this.e.world, sp = w.spawnPoint(airport);
     ac.bus = this.e.bus; ac.airport = airport; ac.place(sp.pos.x, w.groundHeight(sp.pos.x, sp.pos.z) + def.flight.gearHeight, sp.pos.z, sp.heading);
-    this.e.scene.add(ac.mesh); this.list.push(ac); this.player = this.player ?? ac; this.e.bus.emit('aircraft:spawn', ac); return ac;
+    this.e.scene.add(ac.mesh); skinAircraft(ac, this.e); this.list.push(ac); this.player = this.player ?? ac; this.e.bus.emit('aircraft:spawn', ac); return ac;
   }
   respawn(id, livery) {
     const old = this.player; id ??= old.def.id; livery ??= old.livery;

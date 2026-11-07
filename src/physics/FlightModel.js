@@ -56,7 +56,7 @@ export class FlightModel {
         ac.pos.y = gy; if (ac.vel.y < 0) ac.vel.y = 0;
       }
       _fw.set(0, 0, -1).applyQuaternion(q); _fw.y = 0; _fw.normalize(); _rt.set(-_fw.z, 0, _fw.x);
-      const vF = ac.vel.dot(_fw), vL = ac.vel.dot(_rt), wheels = ac.gearPos > 0.9, sf = world.surfaceAt ? world.surfaceAt(ac.pos.x, ac.pos.z) : SURFACES.asphalt;
+      const vF = ac.vel.dot(_fw), vL = ac.vel.dot(_rt), sf0 = world.surfaceAt ? world.surfaceAt(ac.pos.x, ac.pos.z) : SURFACES.asphalt, sf = f.floats && sf0.id === 'water' ? SURFACES.floatWater : sf0, wheels = f.floats ? sf0.id === 'water' : ac.gearPos > 0.9; // floatplanes: pontoons plane on water, slide (belly) on land
       ac.surface = sf.id; ac.bump = sf.bump * Math.min(1, Math.abs(vF) / 20) * Math.sin(ac.pos.x * 3.1 + ac.pos.z * 2.3) * Math.sin(ac.pos.z * 5.7 - ac.pos.x * 1.9) * 0.05;
       ac.vel.addScaledVector(_rt, -vL * Math.min(1, dt * 10 * sf.grip));
       const dec = wheels ? f.rollMu * sf.roll * G + c.brake * f.brakeDecel * sf.brake : 0.5 * G * (sf.id === 'asphalt' ? 1 : 1.3); // belly slide if gear up

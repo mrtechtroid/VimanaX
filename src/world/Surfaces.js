@@ -9,5 +9,6 @@ export const SURFACES = {
   dirt: { id: 'dirt', label: 'Dirt', roll: 4, brake: 0.6, grip: 0.6, bump: 0.6, veh: 0.75, foot: 'dirt', color: 0x8c6e47 },
   sand: { id: 'sand', label: 'Sand', roll: 7, brake: 0.5, grip: 0.45, bump: 0.25, veh: 0.55, foot: 'dirt', color: 0xd8c98f },
   rock: { id: 'rock', label: 'Rock', roll: 5, brake: 0.7, grip: 0.8, bump: 1, veh: 0.6, foot: 'hard', color: 0x7a6f5f },
+  floatWater: { id: 'water', label: 'Water', roll: 1.4, brake: 0.9, grip: 0.22, bump: 0.12, veh: 0, foot: 'water', color: 0x1d5f8a }, // what pontoons feel
   water: { id: 'water', label: 'Water', roll: 20, brake: 0.2, grip: 0.1, bump: 0.1, veh: 0, foot: 'water', color: 0x1d5f8a },
 };

@@ -1,9 +1,11 @@
 // Boots the real app in jsdom with a stubbed WebGL renderer. `const { e, w, frame, key, $ } = await boot()`
 import { JSDOM } from 'jsdom';
 import fs from 'node:fs';
+import { installCanvasStub } from './canvas-stub.mjs';
 export async function boot(search = '?touch') {
   const dom = new JSDOM(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8').replace(/<script type="importmap">.*?<\/script>/s, '').replace(/<script type="module".*?<\/script>/s, ''), { pretendToBeVisual: true, url: 'http://localhost:8000/' + search });
   const w = dom.window, g = globalThis;
+  installCanvasStub(w);
   for (const k of ['document', 'HTMLElement', 'Element', 'Node', 'KeyboardEvent', 'PointerEvent', 'MouseEvent', 'WheelEvent', 'Event']) if (w[k]) Object.defineProperty(g, k, { value: w[k], configurable: true, writable: true });
   Object.defineProperty(g, 'window', { value: w, configurable: true }); Object.defineProperty(g, 'navigator', { value: Object.assign(w.navigator, { getGamepads: () => [] }), configurable: true });
   for (const k of ['addEventListener', 'removeEventListener', 'innerWidth', 'innerHeight', 'location', 'screen', 'getComputedStyle']) Object.defineProperty(g, k, { get: () => w[k]?.bind ? w[k].bind(w) : w[k], configurable: true });

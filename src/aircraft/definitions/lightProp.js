@@ -43,10 +43,38 @@ const cockpit = {
   kind: 'steam', eyes: { pilot: { x: -0.34, y: 0.62, z: -0.05 }, copilot: { x: 0.34, y: 0.62, z: -0.05 } }, panel: { y: 0.57, z: -1.05, w: 1.1, h: 0.41 },
   seats: [{ x: -0.34, z: 0.05, y: -0.12 }, { x: 0.34, z: 0.05, y: -0.12 }], rear: { z: 1.05, y: -0.12, w: 1.1 }, floorY: -0.5, bounds: { x: 0.55, z0: -1.2, z1: 1.9 },
 };
-export default {
+const def = {
   id: 'light-prop', name: 'Skylark 172 (light prop)', role: 'civil-light', flight, flaps: [0, 0.33, 0.66, 1],
   liveries: [{ name: 'White/Blue', body: 0xf2f2f2, accent: 0x1c4fa0 }, { name: 'Yellow/Black', body: 0xf5c518, accent: 0x222222 }, { name: 'Red', body: 0xc62828, accent: 0xeeeeee }],
   camera: { chaseDist: 14, chaseHeight: 4, eye: cockpit.eyes.pilot, copilot: cockpit.eyes.copilot, wing: { x: -4.6, y: 1.2, z: 0.4, look: { x: 0, y: 0.5, z: 1.2 } } },
   cockpit, walk: { hull: { hx: 0.8, z0: -3.3, z1: 4.9 }, seatExit: { x: -1.7, z: -0.1 } },
+  // FR24 PA-28 (GPL, see assets/CREDITS.md) replaces the procedural exterior once loaded; cockpit, doors and physics stay as is.
+  model: {
+    id: 'pa28', pos: [0.13, -0.97, 0.3],
+    parts: {
+      aileronL: 'aileronG', aileronR: 'aileronD', flaps: [['voletG'], ['voletD']], elevators: [['ailes2']], elevatorHinge: 0.3, rudder: 'direction',
+      gear: [['roueA', 'axeAB', 'axeAH', 'articuleAB', 'articuleAH'], ['roueG', 'axeGB', 'axeGH', 'articuleGB', 'articuleGH'], ['roueD', 'axeDB', 'axeDH', 'articuleDB', 'articuleDH']],
+      props: [{ nodes: ['helice'] }], blurNode: 'propblur', hide: ['propdisc'],
+    },
+    lights: [{ x: -5.3, y: 1.27, z: -0.05 }, { x: 5.1, y: 1.28, z: -0.05 }, { x: -0.12, y: 2.62, z: 4.55 }],
+  },
   buildMesh: l => { const g = buildAirframe(spec, l); const c = buildCockpit(cockpit, l); g.add(c.group); g.userData.cockpit = c; return g; },
 };
+
+/** Skylark on pontoons: same airframe, floats plane on water (physics: flight.floats). Land on a lake/sea and taxi with the rudder; it slides on land. */
+const pontoons = h => {
+  const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0xe9e9e4, roughness: 0.5, metalness: 0.2 }), st = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.7, roughness: 0.4 });
+  for (const sd of [-1, 1]) {
+    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 4.4, 6, 14).rotateX(Math.PI / 2), m); f.scale.set(1, 0.8, 1); f.position.set(sd * 1.05, -h + 0.3, -0.35); f.castShadow = true; g.add(f);
+    for (const z of [-1.3, 0.8]) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6), st); s.position.set(sd * 0.86, -h + 0.75, z - 0.35); s.rotation.z = sd * 0.35; g.add(s); }
+  }
+  g.userData.keepSkinned = true; return g;
+};
+const floatFlight = withDefaults({ ...flight, mass: 1220, gearHeight: 1.25, CD0: 0.042, floats: true });
+export const floatplane = {
+  ...def, id: 'light-float', name: 'Skylark 172F (floatplane)', flight: floatFlight,
+  model: { ...def.model, pos: [0.13, -1.22, 0.3], floats: true },
+  buildMesh: l => { const g = def.buildMesh(l), P = g.userData.parts; P.gear.forEach(x => x.parent?.remove(x)); P.gear = []; g.add(pontoons(floatFlight.gearHeight)); return g; },
+};
+
+export default def;

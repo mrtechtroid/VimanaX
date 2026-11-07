@@ -79,6 +79,7 @@ export class HUD {
     if (a.jatoLeft > 0) chips.push([`JATO ${Math.ceil(a.jatoLeft)}s`, 'warn']);
     if (a.def.cargo) { if (a.rampPos > 0.02) chips.push([`Ramp ${Math.round(a.rampPos * 100)}%`, 'cyan']); chips.push([`Cargo ${a.bay.length} \u00b7 ${Math.round(a.mass - f.mass)} kg`, '']); }
     if (a.onGround && a.surface && a.surface !== 'asphalt') chips.push([a.surface[0].toUpperCase() + a.surface.slice(1), 'warn']);
+    if (e.autopilot?.on && a === e.aircraft.player) chips.push([e.autopilot.label(), 'cyan']);
     if (a.mesh.userData.parts.doors.some(d => d.pos > 0.05)) chips.push(['Door open', 'warn']);
     if (env.turbulence !== 'off' && env.intensity > 0.8) chips.push([`Turbulence: ${env.turbLabel().toLowerCase()}`, 'warn']);
     if (e.cargo.driven) chips.push(['Driving - Enter to exit', 'cyan']);

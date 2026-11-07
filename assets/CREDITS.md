@@ -11,4 +11,20 @@ Bundled glTF models in `assets/models/` (all optional: the game falls back to pr
 
 The aircraft (Skylark 172, Atlas T4), the Scout 4x4, crates, cockpits and all code are original procedural work in this repository.
 
-Considered but NOT bundled: the Flightradar24 `fr24-3d-models` aircraft (PA-28, ATR 42, Q400, ...). They are GPLv2 and glTF 1.0, so they would need conversion and would bring GPL terms into your project.
+## Aircraft models (`assets/models/aircraft/`)
+
+Taken from Flightradar24's [fr24-3d-models](https://github.com/Flightradar24/fr24-3d-models) (GPLv2, see `FR24-LICENSE.txt`). The originals are glTF 1.0; they were converted to glTF 2.0
+with Draco compression by `tools/convert-fr24.sh` (gltf-pipeline) and are otherwise unmodified. Upstream sources named by FR24:
+
+| File | Aircraft | Upstream source |
+|---|---|---|
+| `pa28.glb` | Piper PA-28 | https://github.com/FGMEMBERS/Piper-PA-28 |
+| `citation.glb` | Cessna Citation II | https://github.com/FGMEMBERS/Citation |
+| `atr42.glb` | ATR 42 | https://github.com/FGMEMBERS/ATR-42-500 |
+| `b738.glb` | Boeing 737-800 | https://github.com/FGMEMBERS/737-800 |
+
+**Licence note (not legal advice):** these four models are GPLv2. This repository's code is GPLv3. GPLv2-only and GPLv3 material cannot simply be combined into one work
+(the FR24 README says "GPLv2" without an "or later" clause), so if you redistribute the whole package, check this with a lawyer, or swap the models for ones you own: the
+game works without them (procedural airframes) and the hook in `src/aircraft/GltfSkin.js` accepts any glTF whose node names you list in the aircraft definition.
+
+The Skylark, Atlas T4, Scout 4x4, crates, cockpits, terrain and all code are original procedural work in this repository.
