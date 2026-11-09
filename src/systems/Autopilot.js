@@ -43,7 +43,7 @@ export class Autopilot {
     // altitude -> climb angle -> elevator (positive = nose up)
     const vmax = Math.min(f.mass > 20000 ? 9 : 6, k.V * 0.12), vsT = clamp((this.alt - p.pos.y) * 0.12, -vmax, vmax), gT = Math.asin(clamp(vsT / Math.max(k.V, 20), -0.3, 0.3));
     c.pitch = clamp((gT - k.gamma) * 5 - rate.p * 0.8, -0.5, 0.5);
-    c.yaw = clamp(-k.bank * 0.25, -0.3, 0.3) * 0; // coordination left to the airframe's yaw stability
+    c.yaw = 0; // no coordinated rudder: yaw is left to the airframe's own stability
     // speed -> throttle (PI-ish)
     this.thr = clamp(this.thr + (this.spd - k.V) * 0.01 * dt * 4, 0, 1); c.throttle = clamp(this.thr + (this.spd - k.V) * 0.02, 0, 1);
     this.st = k;

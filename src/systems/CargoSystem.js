@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { deckY } from '../aircraft/Deck.js';
+import { disposeTree } from '../aircraft/Aircraft.js';
 const G = 9.81, UP = new THREE.Vector3(0, 1, 0), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _n = new THREE.Vector3(), _q = new THREE.Quaternion(), _iq = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
 const std = (c, r = 0.8, m = 0.1) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
 const box = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; return o; };
@@ -52,7 +53,7 @@ export class CargoSystem {
   }
   near(o, r, type) { let best = null, bd = r; for (const it of this.items) { if (it.state !== 'ground' || (type && it.type !== type)) continue; const d = Math.hypot(it.pos.x - o.x, it.pos.z - o.z); if (d < bd) { bd = d; best = it; } } return best; }
   weigh(p) { p.mass = p.def.flight.mass + p.bay.reduce((s, i) => s + i.mass, 0); }
-  remove(it) { this.e.scene.remove(it.mesh); this.items = this.items.filter(i => i !== it); if (this.driven === it) { this.driven = null; this.e.walk?.reset(); } this.e.bus.emit('hud:message', 'Cargo destroyed on impact'); }
+  remove(it) { this.e.scene.remove(it.mesh); disposeTree(it.mesh); this.items = this.items.filter(i => i !== it); if (this.driven === it) { this.driven = null; this.e.walk?.reset(); } this.e.bus.emit('hud:message', 'Cargo destroyed on impact'); }
   /** Park an item in the next free bay slot (drive-in or K). */
   stow(p, it) { it.state = 'bay'; it.onDeck = null; it.speed = 0; p.bay.push(it); this.slot(p); this.weigh(p); }
   slot(p) { const A = p.mesh.userData.parts.rampAngles; let z = A.hingeZ - 6.2; for (const it of p.bay) { it.slotZ = z; z -= it.type === 'vehicle' ? 5.4 : 1.8; } }

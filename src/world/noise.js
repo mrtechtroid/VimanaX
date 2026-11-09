@@ -8,20 +8,26 @@ export function hash2(x, y, s = 0) {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 2147483647);
   h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296;
 }
-const G = new Float32Array(512 * 2);
+const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+/** Dot product of the gradient picked by hash `h` with (dx, dy). Takes the table as an argument so every noise instance owns its own. */
+const grad = (G, h, dx, dy) => G[h * 2] * dx + G[h * 2 + 1] * dy;
+
+/**
+ * Builds a noise field. All state (permutation, gradients) lives in the closure, so two instances
+ * with different seeds never affect each other.
+ */
 export function makeNoise(seed) {
-  const rnd = mulberry32(seed), perm = new Uint16Array(512), p = Array.from({ length: 256 }, (_, i) => i);
+  const rnd = mulberry32(seed), perm = new Uint16Array(512), p = Array.from({ length: 256 }, (_, i) => i), G = new Float32Array(512 * 2);
   for (let i = 255; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
   for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
   for (let i = 0; i < 512; i++) { const a = rnd() * Math.PI * 2; G[i * 2] = Math.cos(a); G[i * 2 + 1] = Math.sin(a); }
-  const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
   /** Perlin gradient noise, range ~[-1,1]. */
   const n2 = (x, y) => {
     const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, X = xi & 255, Y = yi & 255;
     const a = perm[perm[X] + Y], b = perm[perm[X + 1] + Y], c = perm[perm[X] + Y + 1], d = perm[perm[X + 1] + Y + 1];
     const u = fade(xf), v = fade(yf);
-    const g = (h, dx, dy) => G[h * 2] * dx + G[h * 2 + 1] * dy;
-    const l1 = g(a, xf, yf) + u * (g(b, xf - 1, yf) - g(a, xf, yf)), l2 = g(c, xf, yf - 1) + u * (g(d, xf - 1, yf - 1) - g(c, xf, yf - 1));
+    const g00 = grad(G, a, xf, yf), g10 = grad(G, b, xf - 1, yf), g01 = grad(G, c, xf, yf - 1), g11 = grad(G, d, xf - 1, yf - 1);
+    const l1 = g00 + u * (g10 - g00), l2 = g01 + u * (g11 - g01);
     return (l1 + v * (l2 - l1)) * 1.41;
   };
   /** Fractal Brownian motion, normalised to ~[-1,1]. */

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeTree } from '../aircraft/Aircraft.js';
 const R = () => Math.random() - 0.5;
 
 /** Reacts to 'aircraft:impact' {ac,speed}: gear damage -> aileron loss -> wing/tail separation -> total destruction. Debris is simulated here. */
@@ -8,7 +9,8 @@ export class DamageSystem {
     this.e = e; e.bus.on('aircraft:impact', ({ ac, speed }) => this.hit(ac, speed));
     e.bus.on('action', a => { if (['reset', 'nextAircraft', 'nextLivery'].includes(a)) this.clear(); });
   }
-  clear() { this.debris.forEach(d => this.e.scene.remove(d.o)); this.debris = []; }
+  /** Drop all debris and free its GPU memory (every debris object is single-use). */
+  clear() { for (const d of this.debris) { this.e.scene.remove(d.o); disposeTree(d.o); } this.debris = []; }
   add(o, v, w) { this.debris.push({ o, v, w }); }
   shed(ac, obj) {
     if (!obj?.parent) return; this.e.scene.attach(obj);

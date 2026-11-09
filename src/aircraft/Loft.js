@@ -25,9 +25,9 @@ export function loftBody(stations, o = {}) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const idx = []; for (const q of quads) idx.push(q[0], q[1], q[2], q[0], q[2], q[3]); g.setIndex(idx); g.computeVertexNormals();
   const split = (filter) => { const mats = new Map(); for (const q of quads) if (filter(q)) { if (!mats.has(q[4])) mats.set(q[4], []); mats.get(q[4]).push(q[0], q[1], q[2], q[0], q[2], q[3]); } const out = new THREE.BufferGeometry(); out.setAttribute('position', g.attributes.position); out.setAttribute('normal', g.attributes.normal); out.setAttribute('color', g.attributes.color);
-    const all = []; let start = 0; for (const [m, arr] of [...mats.entries()].sort((a, b) => a[0] - b[0])) { out.addGroup(start, arr.length, m); start += arr.length; all.push(...arr); } out.setIndex(all); return out; };
+    const all = []; let start = 0; for (const [m, arr] of [...mats.entries()].sort((a, b) => a[0] - b[0])) { out.addGroup(start, arr.length, m); start += arr.length; for (let k = 0; k < arr.length; k++) all.push(arr[k]); } out.setIndex(all); return out; }; // loop, not push(...arr): large fuselages exceed the argument limit
   const res = { geo: split(q => q[5] < 0), doors: new Map() };
-  if (o.door) { const ids = new Set(quads.map(q => q[5]).filter(d => d >= 0)); for (const id of ids) { const dg = split(q => q[5] === id); res.doors.set(id, dg.clone()); } }
+  if (o.door) { const ids = new Set(quads.map(q => q[5]).filter(d => d >= 0)); for (const id of ids) res.doors.set(id, split(q => q[5] === id)); }
   return res;
 }
 
@@ -65,7 +65,7 @@ export function wingPiece(w, piece = {}, side = 1, steps = 6, color = null) {
 /** Same surface rotated to stand up as a fin (span along +y). side is ignored; fin sits on the centreline. */
 export function finPiece(w, piece = {}, steps = 6, color = null) {
   const g = wingPiece({ ...w, dihedral: 0 }, piece, 1, steps, color); g.rotateZ(Math.PI / 2); // x(span) -> y; thickness (y) -> -x
-  const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setX(i, p.getX(i)); g.computeVertexNormals(); return g;
+  g.computeVertexNormals(); return g;
 }
 /** Point on the hinge line (chord fraction u of the local chord) at span fraction eta, in the same frame as wingPiece. */
 export function wingPoint(w, eta, u, side = 1) {

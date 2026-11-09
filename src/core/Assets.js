@@ -18,7 +18,7 @@ export class Assets {
   }
   load(id) {
     if (this.cache[id]) return Promise.resolve(this.cache[id]); if (this.pending[id]) return this.pending[id]; if (!this.loader) return Promise.resolve(null);
-    return this.pending[id] = this.loader.loadAsync(this.models[id]).then(g => { this.cache[id] = g; this.e.bus.emit('assets:loaded', id); return g; }).catch(err => { console.warn(`[assets] ${id} failed, using procedural fallback`, err?.message || err); this.e.bus.emit('assets:failed', id); return null; });
+    return this.pending[id] = this.loader.loadAsync(this.models[id]).then(g => { this.cache[id] = g; delete this.pending[id]; this.e.bus.emit('assets:loaded', id); return g; }).catch(err => { delete this.pending[id]; console.warn(`[assets] ${id} failed, using procedural fallback`, err?.message || err); this.e.bus.emit('assets:failed', id); return null; }); // failures are not cached: a later load() retries
   }
   get(id) { return this.cache[id] || null; }
   /** Independent copy (skeleton-safe) of a loaded model, or null. */

@@ -32,7 +32,8 @@ export class HUD {
   init(e) {
     this.e = e; const root = document.getElementById('hud');
     root.insertAdjacentHTML('afterbegin', TEMPLATE); // append, never overwrite: MapUI / TouchControls already added their elements
-    const $ = s => root.querySelector(s); this.$ = $;
+    // element lookups are memoised: the HUD queries the same ~15 nodes every frame and none of them is ever replaced
+    const found = {}, $ = s => found[s] ??= root.querySelector(s); this.$ = $;
     this.pfd = new PFD($('#pfd')); this.ladder = $('#ladder'); this.flapMode = $('#flapMode');
     this.flapMode.onclick = () => e.bus.emit('action', 'flapsAuto'); $('#prompt').onclick = () => e.bus.emit('action', 'interact'); $('#camBtn').onclick = () => e.bus.emit('action', 'camera'); $('#menuBtn').onclick = () => e.bus.emit('action', 'menu');
     e.bus.on('hud:message', m => this.toast(m));
@@ -106,7 +107,7 @@ export class HUD {
     const pr = walk.prompt, pEl = this.$('#prompt'); pEl.hidden = !pr; if (pr) pEl.querySelector('span').textContent = pr.text;
     const fi = this.$('#footInfo'); fi.hidden = seatedView;
     if (mode === 'foot') { const fh = (Math.atan2(-Math.sin(walk.yaw), -Math.cos(walk.yaw)) * 180 / Math.PI + 360) % 360; this.set('footInfo', `On foot <b>${String(Math.round(fh)).padStart(3, '0')}\u00b0</b><span>${Math.round(walk.speed * 3.6)} km/h</span>${walk.inside ? '<span>Aboard</span>' : `<span>${walk.surface === 'hard' ? 'Hard ground' : walk.surface[0].toUpperCase() + walk.surface.slice(1)}</span>`}`, 'innerHTML'); }
-    else if (mode === 'vehicle' && e.cargo.driven) { const v = e.cargo.driven, sf = e.world.surfaceAt(v.pos.x, v.pos.z); this.set('footInfo', `${v.name} <b>${Math.round(Math.abs(v.speed) * U.speed[1] * (U.speed[0] === 'kt' ? 1 : 1))} ${U.speed[0]}</b><span>${sf.label}</span>`, 'innerHTML'); }
+    else if (mode === 'vehicle' && e.cargo.driven) { const v = e.cargo.driven, sf = e.world.surfaceAt(v.pos.x, v.pos.z); this.set('footInfo', `${v.name} <b>${Math.round(Math.abs(v.speed) * U.speed[1])} ${U.speed[0]}</b><span>${sf.label}</span>`, 'innerHTML'); }
     // PFD
     const vs = a.vel.y, vsv = vs * vk;
     this.pfd.draw({ pitch, roll, hdg, spd: V, spdUnit: sl, spdK: sk, gs: Math.hypot(a.vel.x, a.vel.z), alt, altUnit: al, altK: ak, agl, vs, vsText: `${vsv >= 0 ? '+' : '-'}${vl === 'm/s' ? Math.abs(vsv).toFixed(1) : Math.abs(Math.round(vsv))} ${vl}`,

@@ -20,7 +20,7 @@ export class AircraftManager {
   }
   respawn(id, livery) {
     const old = this.player; id ??= old.def.id; livery ??= old.livery;
-    this.e.scene.remove(old.mesh); this.list = this.list.filter(a => a !== old);
+    this.list = this.list.filter(a => a !== old); old.dispose();
     this.e.input.state.throttle = 0; this.player = this.spawn(id, livery, old.airport);
     this.e.bus.emit('hud:message', `${this.player.def.name} - ${this.player.def.liveries[livery].name}`);
   }

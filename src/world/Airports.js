@@ -6,8 +6,9 @@ const MATS = {
   white: new THREE.MeshBasicMaterial({ color: 0xf2f2ee }), yellow: new THREE.MeshBasicMaterial({ color: 0xe8c630 }), wall: M(0xe9e6dc), glass: M(0x2b4a60, { roughness: 0.2, metalness: 0.6 }), roofRed: M(0x9a4a3a), roofGrey: M(0x7c8088, { metalness: 0.4, roughness: 0.6 }),
   steel: M(0xaab0b8, { metalness: 0.5, roughness: 0.5 }), tank: M(0xd8d8d0), orange: M(0xe85a1a), tw: M(0xd9d6cc),
 };
-let _prism; const prism = (w, h, l) => { const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, h)]), g = new THREE.ExtrudeGeometry(s, { depth: l, bevelEnabled: false }); g.translate(0, 0, -l / 2); return g; };
+const prism = (w, h, l) => { const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, h)]), g = new THREE.ExtrudeGeometry(s, { depth: l, bevelEnabled: false }); g.translate(0, 0, -l / 2); return g; };
 const box = (parent, w, h, l, mat, x, y, z, shadow = true) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), mat); m.position.set(x, y + h / 2, z); m.castShadow = shadow; m.receiveShadow = true; parent.add(m); return m; };
+const PAPI_GEO = new THREE.BoxGeometry(1.4, 1, 1.4), PAPI_RED = new THREE.MeshBasicMaterial({ color: 0xff3a2a }), PAPI_WHITE = new THREE.MeshBasicMaterial({ color: 0xfff4f0 });
 const pave = (parent, r, mat, y = 0) => box(parent, r.x1 - r.x0, 0.1, r.z1 - r.z0, mat, (r.x0 + r.x1) / 2, y - 0.05, (r.z0 + r.z1) / 2, false);
 
 /** Layout in the airport-local frame: x = across (right of runway heading), z = behind the heading (runway spans z in [-L/2, L/2]). */
@@ -44,7 +45,7 @@ export function buildAirport(a, lay, scene) {
       // approach lights + threshold lights
       for (let i = 1; i <= 12; i++) lights.push([0, e * (L / 2 + i * 30), 0xfff4d0, 1]); for (let k = -4; k <= 4; k++) lights.push([k * 3, e * (L / 2 + 1), e > 0 ? 0xff3030 : 0x30ff60, 1]);
       // PAPI: 4 lamp boxes left of the runway ~300 m in
-      for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1, 1.4), new THREE.MeshBasicMaterial({ color: i < 2 ? 0xff3a2a : 0xfff4f0 })); m.position.set(-(W / 2 + 10 + i * 4), 0.6, e * (L / 2 - 300)); g.add(m); }
+      for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(PAPI_GEO, i < 2 ? PAPI_RED : PAPI_WHITE); m.position.set(-(W / 2 + 10 + i * 4), 0.6, e * (L / 2 - 300)); g.add(m); }
     }
     if (lay.tier === 2) for (const z of [-L / 2 + 70, L / 2 - 70]) for (let i = 0; i <= 10; i++) lights.push([s * (lay.tx - 7.5 + i * 1.5), z, 0x3070ff, 0.6]);
   }
@@ -54,7 +55,7 @@ export function buildAirport(a, lay, scene) {
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 7, 6), MATS.white); pole.position.set(-s * (W / 2 + 25), 3.5, -L * 0.2); g.add(pole);
   const sock = new THREE.Mesh(new THREE.ConeGeometry(0.8, 3.8, 8, 1, true).rotateZ(-Math.PI / 2).translate(1.9, 0, 0), new THREE.MeshStandardMaterial({ color: 0xff6a1a, side: THREE.DoubleSide })); sock.position.set(-s * (W / 2 + 25), 7, -L * 0.2); sock.rotation.y = 0.7; g.add(sock); g.userData.sock = sock;
   // buildings
-  const hangar = (x, z, w = 26, l = 30, h = 9, roof = MATS.roofGrey) => { box(g, w, h, l, MATS.wall, x, 0, z); const r = new THREE.Mesh(prism(w + 1, 4, l + 1), roof); r.position.set(x, h, z); r.castShadow = true; g.add(r); box(g, w * 0.7, h * 0.75, 0.3, MATS.steel, x, 0, z + (s > 0 ? -1 : 1) * 0); };
+  const hangar = (x, z, w = 26, l = 30, h = 9, roof = MATS.roofGrey) => { box(g, w, h, l, MATS.wall, x, 0, z); const r = new THREE.Mesh(prism(w + 1, 4, l + 1), roof); r.position.set(x, h, z); r.castShadow = true; g.add(r); };
   if (lay.tier === 2) {
     const tx = s * (lay.tx + 108);
     box(g, 26, 10, 70, MATS.wall, tx, 0, 0); box(g, 26.4, 3.2, 70.4, MATS.glass, tx, 4, 0, false); box(g, 28, 0.8, 72, MATS.roofGrey, tx, 10, 0);

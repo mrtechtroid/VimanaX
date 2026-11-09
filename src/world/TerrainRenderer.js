@@ -106,7 +106,8 @@ export class TerrainRenderer {
     }
     want.sort((a, b) => (b.new - a.new) || (a.d - b.d));
     let built = 0; for (const w of want) { if (!force && built >= budget && !w.new) break; this.setChunk(w.cx, w.cz, w.lod); built++; if (!force && built >= budget + 40) break; }
-    while (this.treeQueue.length && (force || true)) { const c = this.treeQueue.shift(); if (this.chunks.get(c.cz * this.n + c.cx) === c && c.lod === 0) this.addTrees(c); if (!force) break; }
+    // forests: one chunk per frame normally, the whole queue when forced (start-up)
+    for (let k = force ? Infinity : 1; k > 0 && this.treeQueue.length; k--) { const c = this.treeQueue.shift(); if (this.chunks.get(c.cz * this.n + c.cx) === c && c.lod === 0) this.addTrees(c); }
   }
 
   /* ---------- trees ---------- */
@@ -114,11 +115,9 @@ export class TerrainRenderer {
     const cone = (r, h, y, seg = 7) => { const g = new THREE.ConeGeometry(r, h, seg, 1, false); g.translate(0, y + h / 2, 0); return g; };
     this.conifer = merge([new THREE.CylinderGeometry(0.35, 0.5, 3, 5).translate(0, 1.5, 0), cone(3.3, 7, 2.2), cone(2.5, 6, 6.2), cone(1.6, 5, 10)]);
     this.broad = merge([new THREE.CylinderGeometry(0.4, 0.6, 4, 5).translate(0, 2, 0), new THREE.IcosahedronGeometry(3.6, 0).scale(1, 0.95, 1).translate(0, 7, 0), new THREE.IcosahedronGeometry(2.4, 0).translate(1.8, 5.4, 0.8)]);
-    const wood = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true }); this.treeMat = wood;
-    this.treeMat.vertexColors = false;
     // two-tone: trunk is brown by baking per-vertex colours (y < 3 or 4 = trunk)
     for (const [g, ty] of [[this.conifer, 3], [this.broad, 4]]) { const p = g.attributes.position, c = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const trunk = p.getY(i) < ty && Math.hypot(p.getX(i), p.getZ(i)) < 0.7; c.set(trunk ? [0.30, 0.2, 0.12] : [1, 1, 1], i * 3); } g.setAttribute('color', new THREE.BufferAttribute(c, 3)); }
-    this.treeMat.vertexColors = true;
+    this.treeMat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true, vertexColors: true });
   }
   addTrees(c) {
     const T = this.T, size = CH * T.cell, x0 = -T.half + c.cx * size, z0 = -T.half + c.cz * size, sp = 17, rnd = mulberry32(c.cx * 7919 + c.cz * 104729), con = [], brd = [], aps = T.cfg.airports;

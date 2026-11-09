@@ -19,7 +19,7 @@ export class Scenery {
         if (r0 > 0.82 - d * 0.45) continue; // thinner toward the edge
         const x = t.x + u * ca - v * sa, z = t.z + u * sa + v * ca; if (!this.ok(x, z)) continue;
         const core = d < 0.28 && t.size > 0.55, w = core ? 14 + hash2(cu, cv, 3) * 12 : 8 + hash2(cu, cv, 4) * 6, l = core ? 14 + hash2(cu, cv, 5) * 12 : 8 + hash2(cu, cv, 6) * 7, y = T.heightAt(x, z);
-        if (core && hash2(cu, cv, 8) > 0.4) blocks.push({ x, y, z, w, l, h: 14 + hash2(cu, cv, 7) * 28, a: ang + (hash2(cu, cv, 9) > 0.5 ? 0 : 0) });
+        if (core && hash2(cu, cv, 8) > 0.4) blocks.push({ x, y, z, w, l, h: 14 + hash2(cu, cv, 7) * 28, a: ang });
         else houses.push({ x, y, z, w, l, h: 3.6 + hash2(cu, cv, 2) * 3, a: ang + (hash2(cu, cv, 10) > 0.5 ? Math.PI / 2 : 0), ci: Math.floor(hash2(cu, cv, 11) * WALLS.length), ri: Math.floor(hash2(cu, cv, 12) * ROOFS.length) });
       }
       // main street cross

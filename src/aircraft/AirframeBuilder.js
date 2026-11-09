@@ -39,7 +39,7 @@ export function buildAirframe(s, l) {
 
   // ---- fuselage skin + lining (same cut-outs so windows and doors are real holes) --------------------------------------
   const st = denseStations(F.stations, F.dz ?? 0.35), opts = { M: F.M ?? 36, color: colorFn, material: F.windows, door: F.doors?.length ? (zm, am) => F.doors.findIndex(d => d.test(zm, am)) : null, doorMaterial: F.windows };
-  const outer = loftBody(st, opts), shrink = F.lining ?? 0.94, inSt = st.map(q => ({ ...q, rx: q.rx * shrink, ry: q.ry * shrink, cy: q.cy * shrink + (q.cy < 0 ? 0 : 0) })), inner = loftBody(inSt, { ...opts, color: null });
+  const outer = loftBody(st, opts), shrink = F.lining ?? 0.94, inSt = st.map(q => ({ ...q, rx: q.rx * shrink, ry: q.ry * shrink, cy: q.cy * shrink })), inner = loftBody(inSt, { ...opts, color: null });
   g.add(new THREE.Mesh(outer.geo, [paint, glass])); g.add(new THREE.Mesh(inner.geo, [lining, none]));
   for (let i = 0; i < (F.doors?.length ?? 0); i++) {
     const d = F.doors[i], holder = new THREE.Group(), pivot = new THREE.Group(); holder.position.set(d.hinge.x, 0, d.hinge.z); holder.add(pivot); g.add(holder);
@@ -86,8 +86,9 @@ export function buildAirframe(s, l) {
     const sp = loftBody(denseStations(e.spinner, 0.08), { M: 20, color: () => rgb(e.spinnerColor ?? l.accent) });
     const pr = new THREE.Group(); pr.position.set(e.x, e.y, e.pz); pr.add(new THREE.Mesh(sp.geo, paint));
     const bl = wingPiece({ span: e.R, rootChord: e.chord ?? 0.16, tipChord: (e.chord ?? 0.16) * 0.65, sweep: 0, twist: -0.5, tRoot: 0.16, tTip: 0.08, camber: 0.05 }, {}, 1, 4), bm = new THREE.MeshStandardMaterial({ color: 0x15171a, metalness: 0.5, roughness: 0.5 });
-    bl.rotateZ(Math.PI / 2); bl.translate(0, e.hub ?? 0.12, 0.05); bl.rotateY(0); // span -> +y
-    for (let i = 0; i < e.blades; i++) { const b = new THREE.Mesh(bl, bm); b.rotation.z = i * 2 * Math.PI / e.blades; pr.add(b); const tip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.02), new THREE.MeshStandardMaterial({ color: 0xe8c820, roughness: 0.6 })); tip.position.set(0, e.R * 0.97, 0.05); b.add(tip); }
+    bl.rotateZ(Math.PI / 2); bl.translate(0, e.hub ?? 0.12, 0.05); // span -> +y
+    const TIP_GEO = new THREE.BoxGeometry(0.05, 0.16, 0.02), tipM = new THREE.MeshStandardMaterial({ color: 0xe8c820, roughness: 0.6 }); // shared by all blade tips of this engine
+    for (let i = 0; i < e.blades; i++) { const b = new THREE.Mesh(bl, bm); b.rotation.z = i * 2 * Math.PI / e.blades; pr.add(b); const tip = new THREE.Mesh(TIP_GEO, tipM); tip.position.set(0, e.R * 0.97, 0.05); b.add(tip); }
     g.add(pr); P.props.push(pr);
     const disc = new THREE.Mesh(new THREE.CircleGeometry(e.R, 28), new THREE.MeshBasicMaterial({ color: 0x20262c, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })); disc.position.set(e.x, e.y, e.pz + 0.06); g.add(disc); P.propBlur.push(disc);
   }

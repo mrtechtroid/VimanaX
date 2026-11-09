@@ -1,5 +1,13 @@
 import * as THREE from 'three';
 const approach = (v, t, s) => v < t ? Math.min(t, v + s) : Math.max(t, v - s);
+/** Free every GPU resource under `obj` (geometries, materials, their textures). Safe for shared objects: three.js re-uploads anything still in use. */
+export function disposeTree(obj) {
+  obj.traverse(o => {
+    o.geometry?.dispose?.();
+    for (const m of [].concat(o.material || [])) { if (!m) continue; for (const v of Object.values(m)) if (v?.isTexture) v.dispose(); m.dispose?.(); }
+    o.dispose?.(); // InstancedMesh buffers
+  });
+}
 
 /** One aircraft instance: physical state + control state + mesh. Physics lives in the FlightModel. */
 export class Aircraft {
@@ -24,7 +32,7 @@ export class Aircraft {
     P.aileronL.rotation.x = c.roll * 0.5; P.aileronR.rotation.x = -c.roll * 0.5;
     (P.elevators.length ? P.elevators : [P.elevator]).forEach(m => m.rotation.x = -c.pitch * 0.5); P.rudder.rotation.y = c.yaw * 0.5;
     P.flaps.forEach(m => m.rotation.x = this.flapPos * 0.7);
-    P.gear.forEach(g => { const r = g.userData.retract; if (r) { g.rotation[r.axis] = r.angle * (1 - this.gearPos); g.visible = this.gearPos > 0.03 || true; } else g.scale.y = Math.max(0.001, this.gearPos); });
+    P.gear.forEach(g => { const r = g.userData.retract; if (r) { g.rotation[r.axis] = r.angle * (1 - this.gearPos); g.visible = true; } else g.scale.y = Math.max(0.001, this.gearPos); });
     const spin = (8 + c.throttle * 60) * dt; P.props.forEach(p => p.rotation.z += spin);
     P.propBlur.forEach(b => { b.material.opacity = Math.min(0.28, Math.max(0, c.throttle - 0.12) * 0.55 + 0.02 * (c.throttle > 0.02)); });
     if (P.ramp) { this.rampPos = approach(this.rampPos, c.rampOpen ? 1 : 0, dt / 3); const A = P.rampAngles; P.ramp.rotation.x = A.closed + (A.open - A.closed) * this.rampPos; }
@@ -34,4 +42,6 @@ export class Aircraft {
     this.mesh.userData.cockpit?.update(this, e, dt, viewing);
   }
   door(id) { return this.mesh.userData.parts.doors.find(d => d.id === id); }
+  /** Remove from the scene and free GPU memory. Also cancels a pending glTF skin for this aircraft. */
+  dispose() { this.dead = true; this.mesh.removeFromParent(); disposeTree(this.mesh); }
 }

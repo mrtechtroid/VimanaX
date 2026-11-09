@@ -27,8 +27,10 @@ export class World {
       if (k) return SURFACES[k === 'asphalt' || k === 'taxi' || k === 'apron' ? 'asphalt' : k] || SURFACES.asphalt;
       if (Math.abs(along) <= a.length / 2 + 12 && Math.abs(across) <= a.width / 2 + 10) return SURFACES.grass;
     }
-    if (this.terrain.isWater(x, z)) return SURFACES.water;
-    return SURFACES[this.terrain.surfaceId(x, z)] || SURFACES.grass;
+    // sample terrain once for this point; surfaceId and the water test reuse h/slope
+    const T = this.terrain, h = T.heightAt(x, z), slope = T.slopeAt(x, z);
+    if (h < T.waterLevelAt(x, z) - 0.02) return SURFACES.water;
+    return SURFACES[T.surfaceId(x, z, h, slope)] || SURFACES.grass;
   }
   spawnPoint(id) {
     const a = this.cfg.airports.find(p => p.id === id) || this.cfg.airports[0], r = a.heading * Math.PI / 180, s = a.length / 2 - 80;
@@ -37,7 +39,7 @@ export class World {
   init(e) {
     this.e = e; this.renderer = new TerrainRenderer(this.terrain, e.scene); this.scenery = new Scenery(this.terrain, e.scene);
     this.airportGroups = this.cfg.airports.map(a => buildAirport(a, a._lay, e.scene));
-    const sp = this.spawnPoint(); this.renderer.update(sp.pos, true); this._lastBuild = 0;
+    const sp = this.spawnPoint(); this.renderer.update(sp.pos, true);
   }
   update(dt, e) {
     const cam = e.camera.position; this.renderer.update(cam); this.renderer.animate(dt);

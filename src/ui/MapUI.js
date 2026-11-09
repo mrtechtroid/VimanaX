@@ -25,7 +25,6 @@ export class MapUI {
     if (!this.route.length) return null; const w = this.route[this.idx], dx = w.x - a.pos.x, dz = w.z - a.pos.z;
     return { idx: this.idx + 1, n: this.route.length, dist: Math.hypot(dx, dz), brg: (Math.atan2(dx, -dz) / D2R + 360) % 360 };
   }
-  info(a, units) { const g = this.guidance(a); if (!g) return ''; const [u, f] = UNITS[units].dist; return `WPT ${g.idx}/${g.n}  ${(g.dist * f).toFixed(1)} ${u}  BRG ${String(Math.round(g.brg)).padStart(3, '0')}\u00b0`; }
   /** One-off canvas of the world raster (bathymetry, relief, rivers) so the map matches the real terrain. */
   terrainImage(w) {
     if (this._img !== undefined) return this._img; this._img = null;

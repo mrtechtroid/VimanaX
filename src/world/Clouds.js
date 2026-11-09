@@ -20,6 +20,7 @@ function stratusTexture() {
   for (let i = 0; i < 260; i++) { const x = rnd() * 256, y = rnd() * 256, r = 10 + rnd() * 34, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(120,125,135,0.22)'); gr.addColorStop(1, 'rgba(120,125,135,0)'); for (const ox of [-256, 0, 256]) for (const oy of [-256, 0, 256]) { g.save(); g.translate(ox, oy); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); g.restore(); } }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(24, 24); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+const _lit = new THREE.Color(), _shadow = new THREE.Color(), _white = new THREE.Color(1, 1, 1), _cool = new THREE.Color(0.7, 0.74, 0.8), _fogTint = new THREE.Color(0.75, 0.78, 0.82);
 const wrap = (v, c) => ((v - c + HALF) % SPAN + SPAN) % SPAN - HALF + c;
 
 /** Cumulus clusters (instanced soft billboards, wrapped around the camera, drifting with the wind) + stratus deck. Flying through cloud cuts visibility (env.visibility). */
@@ -51,20 +52,24 @@ export class Clouds {
       g.setAttribute('aOff', this.aOff); g.setAttribute('aScale', this.aSc); g.setAttribute('aShade', this.aSh); g.instanceCount = n;
       this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = -40; this.e.scene.add(this.mesh);
     }
-    const cam = this.e.camera.position, list = this.puffs.map(p => { const dx = wrap(p.x + this.drift.x, cam.x) - cam.x, dz = wrap(p.z + this.drift.z, cam.z) - cam.z, dy = p.y - cam.y; return { p, d: dx * dx + dy * dy + dz * dz }; }).sort((a, b) => b.d - a.d);
-    list.forEach(({ p }, i) => { this.aOff.setXYZ(i, p.x, p.y, p.z); this.aSc.setX(i, p.sc); this.aSh.setX(i, p.shade); }); this.aOff.needsUpdate = this.aSc.needsUpdate = this.aSh.needsUpdate = true;
+    const cam = this.e.camera.position, P = this.puffs;
+    if (!this.order || this.order.length !== n) { this.order = new Uint32Array(n); this.dist = new Float32Array(n); }
+    const dist = this.dist, order = this.order;
+    for (let i = 0; i < n; i++) { const p = P[i], dx = wrap(p.x + this.drift.x, cam.x) - cam.x, dz = wrap(p.z + this.drift.z, cam.z) - cam.z, dy = p.y - cam.y; dist[i] = dx * dx + dy * dy + dz * dz; order[i] = i; }
+    order.sort((a, b) => dist[b] - dist[a]); // far to near, so near puffs blend last
+    for (let i = 0; i < n; i++) { const p = P[order[i]]; this.aOff.setXYZ(i, p.x, p.y, p.z); this.aSc.setX(i, p.sc); this.aSh.setX(i, p.shade); } this.aOff.needsUpdate = this.aSc.needsUpdate = this.aSh.needsUpdate = true;
   }
   update(dt, e) {
     const env = e.env; if (env.weather !== this.weather) this.build(env.weather);
     if (e.paused) return;
     const cam = e.camera.position; this.drift.x += -Math.sin(env.wind.from * Math.PI / 180) * env.wind.speed * 0.6 * dt; this.drift.z += Math.cos(env.wind.from * Math.PI / 180) * env.wind.speed * 0.6 * dt;
-    const u = this.mat.uniforms; u.uCam.value.copy(cam); const night = 1 - 0.92 * env.night; u.uLit.value.copy(env.sunColor).lerp(new THREE.Color(1, 1, 1), 0.55).multiplyScalar(night * (0.55 + 0.5 * env.sunDir.y)); u.uShadow.value.copy(env.sky).lerp(new THREE.Color(0.7, 0.74, 0.8), 0.5).multiplyScalar(0.7 * night + 0.03); u.uFog.value.copy(env.sky); u.uOpacity.value = this.weather === 'overcast' ? 0.95 : 0.88;
-    this.strat.position.x = cam.x; this.strat.position.z = cam.z; this.strat.material.color.copy(env.sky).lerp(new THREE.Color(1, 1, 1), 0.6).multiplyScalar(Math.max(0.05, night * (0.5 + 0.5 * env.sunDir.y)));
+    const u = this.mat.uniforms; u.uCam.value.copy(cam); const night = 1 - 0.92 * env.night; u.uLit.value.copy(env.sunColor).lerp(_white, 0.55).multiplyScalar(night * (0.55 + 0.5 * env.sunDir.y)); u.uShadow.value.copy(env.sky).lerp(_cool, 0.5).multiplyScalar(0.7 * night + 0.03); u.uFog.value.copy(env.sky); u.uOpacity.value = this.weather === 'overcast' ? 0.95 : 0.88;
+    this.strat.position.x = cam.x; this.strat.position.z = cam.z; this.strat.material.color.copy(env.sky).lerp(_white, 0.6).multiplyScalar(Math.max(0.05, night * (0.5 + 0.5 * env.sunDir.y)));
     if ((this.sortT -= dt) <= 0) { this.sortT = 0.45; this.relightT = (this.relightT || 0) + 1; if (this.relightT % 8 === 0) this.relight(); this.upload(); }
     // inside-cloud density at the camera (what you see) -> visibility
     let dmax = 0; const p = e.camera.position;
     for (const c of this.clusters) { const dx = wrap(c.x + this.drift.x, p.x) - p.x, dz = wrap(c.z + this.drift.z, p.z) - p.z, dy = p.y - (c.y + c.s * 0.12); if (Math.abs(dy) > c.s * 0.34) continue; const d = Math.hypot(dx, dz); if (d < c.r) dmax = Math.max(dmax, (1 - d / c.r) * (1 - Math.abs(dy) / (c.s * 0.34))); }
     if (this.strat.visible && Math.abs(p.y - this.stratAlt) < 90) dmax = Math.max(dmax, this.strat.material.opacity * (1 - Math.abs(p.y - this.stratAlt) / 90));
-    this.inside += (Math.min(1, dmax * 2.2) - this.inside) * Math.min(1, dt * 1.5); env.visibility = 1 - 0.92 * this.inside; env.e.scene.fog.color.copy(env.sky).lerp(new THREE.Color(0.75, 0.78, 0.82).multiplyScalar(Math.max(0.1, night)), this.inside * 0.85);
+    this.inside += (Math.min(1, dmax * 2.2) - this.inside) * Math.min(1, dt * 1.5); env.visibility = 1 - 0.92 * this.inside; env.e.scene.fog.color.copy(env.sky).lerp(_fogTint.set(0.75, 0.78, 0.82).multiplyScalar(Math.max(0.1, night)), this.inside * 0.85);
   }
 }

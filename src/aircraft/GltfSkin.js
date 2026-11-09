@@ -42,7 +42,8 @@ export function rigModel(scene, spec) {
 export function skinAircraft(ac, e) {
   const spec = ac.def.model; if (!spec || ac._skinned || !e.assets) return;
   const apply = () => {
-    if (ac._skinned) return true; const inst = e.assets.instance(spec.id); if (!inst) return false;
+    if (ac._skinned) return true; if (ac.dead) return true; // aircraft was replaced: nothing to attach to (returning true also unsubscribes)
+    const inst = e.assets.instance(spec.id); if (!inst) return false;
     const { root, parts } = rigModel(inst.scene, spec), m = ac.mesh, keep = m.userData.cockpit?.group;
     for (const ch of m.children) if (ch !== keep && !ch.userData.keepSkinned) ch.visible = false;
     m.add(root); Object.assign(m.userData.parts, parts); ac._skinned = true; ac.skin = root; e.bus.emit('aircraft:skinned', ac); return true;

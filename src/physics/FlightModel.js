@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { SURFACES } from '../world/Surfaces.js';
 const G = 9.81, { clamp } = THREE.MathUtils;
 const _n = new THREE.Vector3(), _v = new THREE.Vector3(), _f = new THREE.Vector3(), _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _l = new THREE.Vector3(), _vh = new THREE.Vector3();
-const _q = new THREE.Quaternion(), _dq = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _q = new THREE.Quaternion(), _dq = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ'), _axis = new THREE.Vector3();
 
 /** IFlightModel: point-mass + body-rate model with aero (lift/drag/stall), control surfaces, gear/ground contact. */
 export class FlightModel {
@@ -38,7 +38,7 @@ export class FlightModel {
     if (env.rot && !ac.onGround) { const k = effS * dt; w.x += env.rot.x * k; w.y += env.rot.y * k; w.z += env.rot.z * k; } // turbulence: random pitch/yaw/roll kicks
     ac.vel.addScaledVector(_f, dt / ac.mass);
     const wl = w.length();
-    if (wl > 1e-6) { _dq.setFromAxisAngle(_v.copy(w).divideScalar(wl), wl * dt); q.multiply(_dq); }
+    if (wl > 1e-6) { _dq.setFromAxisAngle(_axis.copy(w).divideScalar(wl), wl * dt); q.multiply(_dq); } // own scratch: _v may still hold vb
     q.normalize(); ac.pos.addScaledVector(ac.vel, dt);
 
     const was = ac.onGround; ac.onGround = false;

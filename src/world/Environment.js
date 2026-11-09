@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-const _w = new THREE.Vector3(), _g = new THREE.Vector3(), _r = new THREE.Vector3(), { clamp } = THREE.MathUtils;
+const _w = new THREE.Vector3(), _g = new THREE.Vector3(), _r = new THREE.Vector3(), _T = { I: 0, thermal: 0 }, { clamp } = THREE.MathUtils;
 export const WEATHER = { clear: { fog: 0, over: 0, turb: 0.25, cover: 0.12 }, cloudy: { fog: 0.12, over: 0.3, turb: 0.6, cover: 0.45 }, overcast: { fog: 0.3, over: 0.75, turb: 0.9, cover: 0.85 }, fog: { fog: 0.9, over: 0.5, turb: 0.2, cover: 0.3 } };
 export const TURB_LEVELS = { off: 0, light: 0.6, auto: 1, moderate: 1.7, severe: 3.2 };
 const DAY = new THREE.Color(0x8cbcf0), DUSK = new THREE.Color(0xf08a50), NIGHT = new THREE.Color(0x050a14), GREY = new THREE.Color(0x8d949b);
@@ -37,13 +37,13 @@ export class Environment {
     this.apply();
   }
   windVector() { const r = this.wind.from * Math.PI / 180; return _w.set(-Math.sin(r), 0, Math.cos(r)).multiplyScalar(this.wind.speed); }
-  /** Local turbulence strength (m/s rms-ish) at a position; also fills this.gust / this.rot. */
+  /** Local turbulence strength (m/s rms-ish) at a position: {I, thermal}, or 0 when turbulence is off. Returns a shared object. */
   turbAt(p) {
     const W = WEATHER[this.weather], lvl = TURB_LEVELS[this.turbulence] ?? 1; if (!lvl) return 0;
     const world = this.e?.world, agl = world ? p.y - world.groundHeight(p.x, p.z) : 500, over = world && world.heightAt(p.x, p.z) > 2;
     let I = (W.turb + this.wind.speed * 0.07) * (1 + (this.wind.speed > 2 && over ? 1.3 * Math.exp(-Math.max(agl, 0) / 150) : 0));
     const day = Math.max(0, Math.sin((this.hour - 7) / 10 * Math.PI)); const thermal = over && W.over < 0.8 ? day * Math.max(0, Math.sin(p.x * 0.0021) * Math.sin(p.z * 0.0023 + 1.3)) * (agl < 1800 ? 1 : 0) : 0;
-    return { I: Math.min(3.2, I * lvl), thermal: thermal * lvl };
+    _T.I = Math.min(3.2, I * lvl); _T.thermal = thermal * lvl; return _T; // shared scratch object: called every physics substep
   }
   /** Steady wind + gust at a position (called every physics substep). */
   windAt(p) {
@@ -74,7 +74,7 @@ export class Environment {
     } catch (err) { this.iblDirty = 0; }
   }
   update(dt, e) {
-    this.t += dt; const cam = e.camera; this.dome.position.copy(cam.position); this.dome.scale.setScalar(1);
+    this.t += dt; const cam = e.camera; this.dome.position.copy(cam.position);
     const f = e.walk?.mode === 'foot' ? e.walk.pos : (e.cargo.driven || e.aircraft.player)?.pos; if (f) { const d = this.sunDir, h = e.walk?.mode === 'foot' ? 25 : (e.aircraft.player?.def.camera.chaseDist ?? 14) * 1.3; const sc = this.sun.shadow.camera; if (sc.right !== h) { sc.left = sc.bottom = -h; sc.right = sc.top = h; sc.updateProjectionMatrix(); }
       this.sun.target.position.copy(f); this.sun.position.copy(f).addScaledVector(d, 500); }
     if (this.iblDirty > 0) { this.iblDirty -= dt; if (this.iblDirty <= 0) this.rebuildIBL(); }

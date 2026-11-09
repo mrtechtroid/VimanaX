@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { deckY, rampEnd } from '../aircraft/Deck.js';
+import { disposeTree } from '../aircraft/Aircraft.js';
 const UP = new THREE.Vector3(0, 1, 0), EYE = 1.65, R = 0.32, _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion(), _iq = new THREE.Quaternion();
 const clamp = THREE.MathUtils.clamp;
 
@@ -34,7 +35,7 @@ export class WalkSystem {
     e.bus.on('assets:loaded', id => { if (id === 'soldier') this.upgradeAvatar(); }); this.upgradeAvatar();
   }
   upgradeAvatar() {
-    const inst = this.e.assets?.instance('soldier'); if (!inst || this.mixer) return; const m = inst.scene; m.rotation.y = Math.PI; this.avatar.remove(this.fb); this.avatar.add(m); m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    const inst = this.e.assets?.instance('soldier'); if (!inst || this.mixer) return; const m = inst.scene; m.rotation.y = Math.PI; this.avatar.remove(this.fb); disposeTree(this.fb); this.avatar.add(m); m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
     this.mixer = new THREE.AnimationMixer(m); this.acts = {}; for (const c of inst.animations) if (['Idle', 'Walk', 'Run'].includes(c.name)) { const a = this.mixer.clipAction(c); a.play(); a.setEffectiveWeight(c.name === 'Idle' ? 1 : 0); this.acts[c.name] = a; }
   }
   reset() { this.mode = 'aircraft'; this.seat = 'pilot'; this.inside = null; this.avatar.visible = false; this.prompt = null; if (this.e.cargo) this.e.cargo.driven = null; }
