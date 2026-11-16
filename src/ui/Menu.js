@@ -5,6 +5,13 @@ import { CAMERA_MODES } from '../camera/CameraManager.js';
 import { TURB_LEVELS } from '../world/Environment.js';
 
 const TABS = [['aircraft', 'Aircraft'], ['flight', 'Flight'], ['world', 'World'], ['camera', 'Camera'], ['controls', 'Controls'], ['help', 'Keys']];
+const TOUCH = [
+  ['Flying', [['Left pad', 'Pitch and roll. Pull down to climb, push up to dive'], ['\u25c0 \u25b6', 'Rudder and nose wheel'], ['Right slider', 'Engine power. It stays where you leave it'], ['Brake', 'Wheel brakes while held']]],
+  ['Buttons', [['Gear', 'Landing gear up or down'], ['Flaps', 'Auto flaps on or off. Flap \u2212 and + switch to manual'], ['More', 'Spoilers, reverse, strobes, autopilot, map, ramp and cargo'], ['View', 'Next camera']]],
+  ['Looking around', [['Drag', 'Look around or orbit'], ['Pinch', 'Zoom'], ['Double tap', 'Reset the view']]],
+  ['On foot', [['Left pad', 'Walk'], ['Use', 'Doors, seats, ramp, vehicles'], ['Jump  Run', 'Jump, or hold a sprint'], ['Drag', 'Look']]],
+  ['Tilt steering', [['Controls tab', 'Turn on Tilt steering, hold the phone like a wheel. Invert pitch if it feels backwards']]],
+];
 const ROLE = { 'civil-light': 'Light civil', 'military-transport': 'Military transport' };
 const WEATHER = ['clear', 'cloudy', 'overcast', 'fog'];
 const hex = n => '#' + n.toString(16).padStart(6, '0');
@@ -22,19 +29,23 @@ export class Menu {
   constructor() { this.alwaysUpdate = true; this.tab = 'aircraft'; this.isOpen = false; }
   init(e) {
     this.e = e; const el = this.el = document.createElement('div'); el.id = 'menu'; el.hidden = true;
-    el.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Menu"><nav class="rail"><h1>Open Flight Engine<small>Free flight</small></h1>${TABS.map(([id, l]) => `<button class="tab" role="tab" data-tab="${id}">${l}</button>`).join('')}<div class="grow"></div><button class="tab go" data-close>Resume</button></nav><div class="mbody" id="mbody"></div></div>`;
+    el.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Menu"><nav class="rail"><h1>VimanaX<small>Free flight</small></h1>${TABS.map(([id, l]) => `<button class="tab" role="tab" data-tab="${id}">${id === 'help' && document.body.classList.contains('coarse') ? 'Touch' : l}</button>`).join('')}<div class="grow"></div><button class="tab go" data-close>Resume</button></nav><div class="mbody" id="mbody"></div></div>`;
     document.getElementById('hud').appendChild(el); this.body = el.querySelector('#mbody');
     el.addEventListener('click', ev => {
       if (ev.target === el || ev.target.closest('[data-close]')) return this.toggle(false);
       const t = ev.target.closest('[data-tab]'); if (t) this.show(t.dataset.tab);
+    });
+    el.addEventListener('keydown', ev => { // keep Tab inside the dialog while it is open
+      if (ev.key !== 'Tab' || !this.isOpen) return; const f = [...el.querySelectorAll('button,input,[tabindex="0"]')].filter(x => x.offsetParent !== null); if (!f.length) return;
+      const first = f[0], last = f[f.length - 1]; if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); } else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
     });
     e.bus.on('action', a => { if (a === 'menu') this.toggle(); else if (a === 'help') { this.show('help'); this.toggle(true); } else this.refresh(); });
     e.bus.on('settings', ({ key }) => { if (key === 'autoFlaps' || key === 'units') this.refresh(); }); e.bus.on('flaps:set', () => this.refresh());
     e.bus.on('settings', ({ key }) => { if (key === 'pauseOnMenu' && this.isOpen) e.paused = e.settings.get('pauseOnMenu'); });
   }
   toggle(on = !this.isOpen) {
-    this.isOpen = on; this.el.hidden = !on; document.body.classList.toggle('menu-open', on); this.e.paused = on && this.e.settings.get('pauseOnMenu');
-    if (on) this.show(this.tab); else document.activeElement?.blur?.();
+    this.isOpen = on; this.el.hidden = !on; document.body.classList.toggle('menu-open', on || document.body.classList.contains('splash-open')); this.e.paused = on && this.e.settings.get('pauseOnMenu');
+    if (on) { this.show(this.tab); this.el.querySelector('.tab[aria-selected=true]')?.focus?.({ preventScroll: true }); } else document.activeElement?.blur?.();
   }
   show(tab) { this.tab = tab; this.el.querySelectorAll('.tab[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab)); this.render(); }
   refresh() { if (this.isOpen && (this.tab === 'flight' || this.tab === 'aircraft')) this.render(); } // state-driven tabs only: re-rendering a slider tab mid-drag would break the drag
@@ -74,6 +85,7 @@ export class Menu {
     if (p.def.cargo) T.push(['ramp', 'Cargo ramp', c.rampOpen ? 'Open' : 'Closed', c.rampOpen], ['cargo', 'Load / airdrop', `${p.bay.length} in bay`, false]);
     const doors = p.mesh.userData.parts.doors; T.push(['door', 'Doors', doors.some(d => d.target) ? 'Open' : 'Closed', doors.some(d => d.target), doors.some(d => d.target) && (p.controls.throttle > 0.4 || !p.onGround)]);
     T.push(['interact', e.walk.mode === 'aircraft' ? 'Leave seat' : 'Get back in', e.walk.mode === 'aircraft' ? 'Needs a stopped aircraft' : 'Walk to a door and press E', false]);
+    T.push(['reset', 'Reset flight', 'Back to the runway', false]);
     return `<h2>Flight</h2><p class="lead">Auto flaps picks a setting from your airspeed, gear and power, and retracts them if you go too fast. Choosing a flap setting yourself switches to manual.</p>
       <h3>Flaps</h3>${this.seg([['auto', 'Auto'], ...p.def.flaps.map((_, i) => [i, i])], auto ? 'auto' : c.flapIndex, 'flap', auto ? 'auto' : '')}
       <h3>Systems</h3><div class="tiles">${T.map(([a, l, s, on, w]) => `<button class="tile ${w ? 'warn' : on ? 'on' : ''}" data-act="${a}"><b>${l}</b><span>${w ? 'Damaged' : s}</span></button>`).join('')}</div>`;
@@ -87,18 +99,21 @@ export class Menu {
   r_world() {
     const env = this.e.env, [sl, sk] = UNITS[this.e.settings.get('units')].speed;
     return `<h2>World</h2><p class="lead">Time, weather and wind apply instantly.</p>
-      ${this.field('f-hour', 'Time of day', 0, 23, 1, env.hour, `${String(env.hour).padStart(2, '0')}:00`)}
+      ${this.field('f-hour', 'Time of day', 0, 23, 1, Math.floor(env.hour), env.fmtHour())}
       <div class="seg">${[['Dawn', 6], ['Noon', 12], ['Sunset', 18], ['Night', 22]].map(([l, h]) => `<button data-hour="${h}">${l}</button>`).join('')}</div>
+      <h3>Clock</h3>${this.seg([[0, 'Paused'], [1, 'Real time'], [60, '1 min = 1 h'], [600, '6 s = 1 h']], this.e.settings.get('timeScale'), 'clock')}<p class="note">With the clock running the sun, sky, clouds and lights change continuously.</p>
       <h3>Weather</h3>${this.seg(WEATHER.map(w => [w, w[0].toUpperCase() + w.slice(1)]), env.weather, 'wx')}
       <h3>Wind</h3>${this.field('f-ws', 'Strength', 0, 25, 1, env.wind.speed, `${Math.round(env.wind.speed * sk)} ${sl}`)}${this.field('f-wd', 'Blowing from', 0, 345, 15, env.wind.from, `${String(env.wind.from).padStart(3, '0')}\u00b0`)}
       <h3>Turbulence</h3>${this.seg(Object.keys(TURB_LEVELS).map(k => [k, k[0].toUpperCase() + k.slice(1)]), env.turbulence, 'turb')}<p class="note">Auto follows the weather, wind, low-level terrain effects and daytime thermals over land.</p>
+      <h3>Picture</h3>${this.sw('toneMapping', 'Cinematic tone mapping', 'Softer highlights and richer colour. Turn off if the picture looks too dark')}
       <h3>Units</h3>${this.seg(Object.keys(UNITS).map(u => [u, u[0].toUpperCase() + u.slice(1)]), this.e.settings.get('units'), 'unit')}`;
   }
   w_world() {
     const env = this.e.env, b = this.body, [sl, sk] = UNITS[this.e.settings.get('units')].speed, $ = s => b.querySelector(s);
     const bind = (id, fn, fmt) => { const i = $('#' + id), o = $('#' + id + '-o'); i.oninput = () => { fn(+i.value); env.apply(); o.textContent = fmt(+i.value); }; };
-    bind('f-hour', v => env.hour = v, v => `${String(v).padStart(2, '0')}:00`); bind('f-ws', v => env.wind.speed = v, v => `${Math.round(v * sk)} ${sl}`); bind('f-wd', v => env.wind.from = v, v => `${String(v).padStart(3, '0')}\u00b0`);
+    bind('f-hour', v => env.hour = v, v => env.fmtHour(v)); bind('f-ws', v => env.wind.speed = v, v => `${Math.round(v * sk)} ${sl}`); bind('f-wd', v => env.wind.from = v, v => `${String(v).padStart(3, '0')}\u00b0`);
     b.querySelectorAll('[data-hour]').forEach(x => x.onclick = () => { env.hour = +x.dataset.hour; env.apply(); this.render(); });
+    b.querySelectorAll('[data-clock]').forEach(x => x.onclick = () => { this.e.settings.set('timeScale', +x.dataset.clock, true); this.render(); }); this.wireSwitches();
     b.querySelectorAll('[data-wx]').forEach(x => x.onclick = () => { env.weather = x.dataset.wx; env.apply(); this.render(); });
     b.querySelectorAll('[data-turb]').forEach(x => x.onclick = () => { env.turbulence = x.dataset.turb; this.render(); });
     b.querySelectorAll('[data-unit]').forEach(x => x.onclick = () => { this.e.settings.set('units', x.dataset.unit, true); this.render(); });
@@ -122,13 +137,23 @@ export class Menu {
     const s = this.e.settings;
     return `<h2>Controls</h2><p class="lead">Keyboard, gamepad and touch work together.</p>${this.field('f-cs', 'Control sensitivity', 0.4, 1.6, 0.1, s.get('controlSensitivity'), s.get('controlSensitivity').toFixed(1) + 'x')}
       ${this.field('f-shake', 'Camera shake', 0, 2, 0.1, s.get('cameraShake'), s.get('cameraShake').toFixed(1) + 'x')}
-      ${this.sw('sound', 'Sound')}${this.sw('autoDoors', 'Close doors automatically', 'After you climb into the seat')}${this.sw('cockpitHud', 'Show flight display in cockpit view', 'Off: use the instruments in the panel')}${this.sw('pauseOnMenu', 'Pause while menu is open')}
+      ${this.sw('sound', 'Sound')}${this.sw('coach', 'Flight tips', 'A short hint at each stage: power, rotate, gear up')}${this.sw('autoDoors', 'Close doors automatically', 'After you climb into the seat')}${this.sw('cockpitHud', 'Show flight display in cockpit view', 'Off: use the instruments in the panel')}${this.sw('pauseOnMenu', 'Pause while menu is open')}
+      ${this.touchSection()}
       <h3>Devices</h3><div class="tiles"><button class="tile" data-act="tilt"><b>Tilt steering</b><span>Phones and tablets</span></button><button class="tile" data-act="tiltInvert"><b>Invert tilt pitch</b><span>If it feels backwards</span></button><button class="tile" data-act="fullscreen"><b>Fullscreen</b><span>Toggle</span></button></div>
       <p class="note">Gamepad: left stick pitch and roll, right stick yaw and throttle, A brake, X gear, LB / RB flaps, B auto flaps, Y camera, Back map, Start menu.</p>`;
   }
-  w_controls() { this.slider('f-cs', 'controlSensitivity', v => v, v => v.toFixed(1) + 'x'); this.slider('f-shake', 'cameraShake', v => v, v => v.toFixed(1) + 'x'); this.wireSwitches(); this.body.querySelectorAll('[data-act]').forEach(b => b.onclick = () => this.e.bus.emit('action', b.dataset.act)); }
+  touchSection() {
+    if (!document.body.classList.contains('coarse')) return ''; const s = this.e.settings, pc = v => Math.round(v * 100) + '%';
+    return `<h3>Touch controls</h3>${this.sw('touchLeft', 'Left-handed layout', 'Swaps the stick and the power slider')}${this.sw('touchFloat', 'Floating stick', 'The stick appears under your thumb')}${this.sw('haptics', 'Vibration', 'On buttons and impacts (Android only)')}
+      ${this.field('f-tscale', 'Control size', 0.7, 1.5, 0.05, s.get('touchScale'), pc(s.get('touchScale')))}${this.field('f-topac', 'Control opacity', 0.4, 1, 0.05, s.get('touchOpacity'), pc(s.get('touchOpacity')))}`;
+  }
+  w_controls() {
+    const pc = v => Math.round(v * 100) + '%'; if (this.body.querySelector('#f-tscale')) { this.slider('f-tscale', 'touchScale', v => v, pc); this.slider('f-topac', 'touchOpacity', v => v, pc); }
+    this.slider('f-cs', 'controlSensitivity', v => v, v => v.toFixed(1) + 'x'); this.slider('f-shake', 'cameraShake', v => v, v => v.toFixed(1) + 'x'); this.wireSwitches(); this.body.querySelectorAll('[data-act]').forEach(b => b.onclick = () => this.e.bus.emit('action', b.dataset.act)); }
 
   // ---- Keys
-  w_help() { wireRebind(this.body, this.e, () => this.render()); }
-  r_help() { return `<h2>Keys</h2><p class="lead">Everything here is also in the Flight, Camera and World tabs.</p>${KEYS.map(([g, rows]) => `<h3>${g}</h3><div class="keys">${rows.map(([k, d]) => `<div><span>${d}</span><kbd>${k}</kbd></div>`).join('')}</div>`).join('')}${rebindHTML(this.e.settings)}`; }
+  w_help() { if (!document.body.classList.contains('coarse')) wireRebind(this.body, this.e, () => this.render()); }
+  r_help() {
+    if (document.body.classList.contains('coarse')) return `<h2>Touch controls</h2><p class="lead">Hold the phone sideways. Everything not on screen is in this menu.</p>${TOUCH.map(([g, rows]) => `<h3>${g}</h3><div class="keys">${rows.map(([k, d]) => `<div><span>${d}</span><kbd>${k}</kbd></div>`).join('')}</div>`).join('')}`;
+    return `<h2>Keys</h2><p class="lead">Everything here is also in the Flight, Camera and World tabs.</p>${KEYS.map(([g, rows]) => `<h3>${g}</h3><div class="keys">${rows.map(([k, d]) => `<div><span>${d}</span><kbd>${k}</kbd></div>`).join('')}</div>`).join('')}${rebindHTML(this.e.settings)}`; }
 }

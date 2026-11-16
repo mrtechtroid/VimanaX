@@ -1,6 +1,6 @@
 import { REBINDABLE, effectiveMap } from '../input/KeyboardInput.js';
 
-const pretty = c => c.replace(/^Key|^Digit/, '').replace('BracketLeft', '[').replace('BracketRight', ']').replace('Backspace', 'Bksp').replace('Arrow', 'Arrow ');
+export const pretty = c => c.replace(/^Key|^Digit/, '').replace('BracketLeft', '[').replace('BracketRight', ']').replace('Backspace', 'Bksp').replace('Arrow', 'Arrow ');
 /** Key-rebinding panel for the Keys tab. Click a row, press a key (Esc cancels). Persisted through Settings.bindings. */
 export function rebindHTML(settings) {
   const map = effectiveMap(settings.get('bindings')), key = a => Object.keys(map).find(c => map[c] === a);

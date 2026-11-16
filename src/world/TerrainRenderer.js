@@ -43,7 +43,7 @@ function merge(parts) {
 /** Streams terrain chunks around the camera with 4 LODs, plus sea, lakes, rivers and instanced forests near the viewer. */
 export class TerrainRenderer {
   constructor(T, scene, opts = {}) {
-    this.T = T; this.scene = scene; this.group = new THREE.Group(); scene.add(this.group); this.n = Math.round(T.N / CH); this.chunks = new Map(); this.treeQueue = []; this.tick = 0; this.trees = opts.trees !== false;
+    this.T = T; this.scene = scene; this.col = opts.colliders ?? null; this.group = new THREE.Group(); scene.add(this.group); this.n = Math.round(T.N / CH); this.chunks = new Map(); this.treeQueue = []; this.tick = 0; this.trees = opts.trees !== false;
     this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, map: detailTexture() });
     this.buildWater(); this.buildTreeGeoms();
   }
@@ -93,7 +93,7 @@ export class TerrainRenderer {
     const key = cz * this.n + cx; let c = this.chunks.get(key);
     if (c && c.lod === lod) return;
     if (c) { this.group.remove(c.mesh); c.mesh.geometry.dispose(); this.dropTrees(c); }
-    c = { cx, cz, lod, mesh: this.buildChunk(cx, cz, lod), trees: [] }; this.chunks.set(key, c);
+    c = { cx, cz, lod, mesh: this.buildChunk(cx, cz, lod), trees: [], solids: [] }; this.chunks.set(key, c);
     if (lod === 0 && this.trees) this.treeQueue.push(c); // forests are generated one chunk per frame to avoid hitches
   }
   /** Call every frame with the camera position. Rebuilds at most `budget` chunks per call (unlimited when force). */
@@ -132,9 +132,11 @@ export class TerrainRenderer {
       if (!list.length) continue; const m = new THREE.InstancedMesh(geo, this.treeMat, list.length), M = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), cc = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
       list.forEach(([x, y, z, k, a, t], i) => { q.setFromAxisAngle(up, a); s.set(k, k * (0.9 + t * 0.4), k); p.set(x, y, z); M.compose(p, q, s); m.setMatrixAt(i, M); const g = geo === this.conifer ? 0.7 + t * 0.35 : 0.8 + t * 0.4; cc.setRGB(0.55 * g, (geo === this.conifer ? 0.85 : 1.0) * g, 0.5 * g); if (geo === this.broad && t > 0.85) cc.setRGB(1.0, 0.8, 0.35); m.setColorAt(i, cc); });
       m.instanceMatrix.needsUpdate = true; m.castShadow = false; m.receiveShadow = false; this.group.add(m); c.trees.push(m);
+      // trees are solid while their chunk exists: trunk plus inner canopy as one cylinder (a little forgiving on purpose)
+      if (this.col) list.forEach(([x, y, z, k, a, t], i) => c.solids.push(this.col.addCyl({ x, z, r: 1.6 * k, y0: y, y1: y + 11 * k * (0.9 + t * 0.4), kind: 'tree', mesh: m, idx: i })));
     }
   }
-  dropTrees(c) { for (const m of c.trees) { this.group.remove(m); m.dispose(); } c.trees = []; }
+  dropTrees(c) { for (const m of c.trees) { this.group.remove(m); m.dispose(); } c.trees = []; if (this.col && c.solids.length) this.col.removeAll(c.solids); c.solids = []; }
 
   /* ---------- water ---------- */
   buildWater() {

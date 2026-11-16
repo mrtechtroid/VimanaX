@@ -10,7 +10,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:var(-
 #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 #hud{position:fixed;inset:0;pointer-events:none;color:var(--txt);font:13px/1.35 var(--ui)}
 #hud button,#hud canvas,#hud input,.ctl{pointer-events:auto;touch-action:none}
-#hud button{font:inherit;color:inherit;cursor:pointer}
+/* :where() keeps this base rule at zero specificity. As `#hud button` it beat every class rule (tab colours, selected states, .on states) */
+:where(#hud) button{font:inherit;color:inherit;cursor:pointer}
+/* buttons inside scrolling panels must not block swipe-scrolling */
+#menu button,#menu input,#splash button,#splash input{touch-action:manipulation}
 :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .glass{background:var(--glass);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);border:1px solid var(--line);border-radius:14px}
 .num{font-family:var(--num);font-variant-numeric:tabular-nums}
@@ -92,25 +95,49 @@ body.hud-off #menuBtn{display:grid}
 #map{position:absolute;right:calc(12px + var(--sr));bottom:calc(12px + var(--sb));border:1px solid var(--line-2);border-radius:50%;box-shadow:0 0 0 5px rgba(9,24,33,.55);cursor:zoom-in}
 #map.big{position:fixed;left:50%;top:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);border-radius:18px;z-index:20;box-shadow:0 0 0 100vmax rgba(3,10,15,.62);cursor:crosshair}
 
-/* ---------- touch controls ------------------------------------------------------------------------- */
-.stick{position:absolute;left:calc(24px + var(--sl));bottom:calc(24px + var(--sb));width:150px;height:150px;border-radius:50%;background:var(--glass);border:1px solid var(--line-2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+/* ---------- touch controls -------------------------------------------------------------------------
+   Two mirrored clusters (.tc-l stick + rudder, .tc-r power + action grid + brake). `body.lefty` swaps them.
+   --tcs (size) and --tco (opacity) are set from Settings by TouchControls. */
+:root{--tcs:1;--tco:.9;--stick:calc(136px*var(--tcs))}
+.tc{position:absolute;bottom:calc(14px + var(--sb));display:flex;align-items:flex-end;gap:calc(10px*var(--tcs));pointer-events:none;opacity:var(--tco)}
+.tc-l{left:calc(18px + var(--sl));flex-direction:row}
+.tc-r{right:calc(18px + var(--sr));flex-direction:row-reverse}
+body.lefty .tc-l{left:auto;right:calc(18px + var(--sr));flex-direction:row-reverse}
+body.lefty .tc-r{right:auto;left:calc(18px + var(--sl));flex-direction:row}
+.stickzone{position:absolute;left:calc(-18px - var(--sl));bottom:calc(-14px - var(--sb));width:calc(var(--stick)*1.65 + 18px);height:calc(var(--stick)*1.5 + 14px);border-radius:0 40px 0 0;touch-action:none}
+body.lefty .stickzone{left:auto;right:calc(-18px - var(--sr));border-radius:40px 0 0 0}
+.stick{position:relative;flex:none;width:var(--stick);height:var(--stick);border-radius:50%;background:var(--glass);border:1px solid var(--line-2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);pointer-events:none;transition:transform .14s ease-out,border-color .14s}
+.stick.on{transition:none;border-color:var(--cyan)}
 .stick::before,.stick::after{content:"";position:absolute;background:var(--line);left:50%;top:14%;bottom:14%;width:1px}
 .stick::after{left:14%;right:14%;top:50%;bottom:auto;width:auto;height:1px}
-.knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px;border-radius:50%;background:rgba(88,214,255,.5);border:2px solid var(--cyan);pointer-events:none}
-.thr{position:absolute;right:calc(24px + var(--sr));bottom:calc(24px + var(--sb));width:60px;height:190px;border-radius:18px;background:var(--glass);border:1px solid var(--line-2);overflow:hidden;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.thr span{position:absolute;top:8px;width:100%;text-align:center;font-size:11px;z-index:1;color:var(--dim)}
-.thr .fill{position:absolute;left:0;right:0;bottom:0;background:rgba(88,214,255,.5);border-top:2px solid var(--cyan)}
-.tbtn{position:absolute;width:60px;height:60px;border-radius:50%;background:var(--glass);border:1px solid var(--line-2);font:700 14px var(--ui);bottom:calc(32px + var(--sb))}
-#yawL{left:calc(200px + var(--sl))}#yawR{left:calc(268px + var(--sl))}#brk{right:calc(108px + var(--sr));border-color:var(--red);color:#ffd9d8}
-.tbtn:active,.quick button:active{background:var(--cyan);color:var(--ink)}
-.quick{position:absolute;right:calc(108px + var(--sr));bottom:calc(104px + var(--sb));display:flex;gap:6px;pointer-events:auto}
-.quick button{min-width:50px;height:40px;border-radius:12px;background:var(--glass);border:1px solid var(--line-2);font-size:12px}
-.quick button.on{border-color:var(--green);color:var(--green)}
+.stick i.lbl{position:absolute;left:50%;transform:translateX(-50%);font:10px var(--ui);color:var(--dim);font-style:normal}
+.stick i.up{top:5px}.stick i.dn{bottom:5px}
+.knob{position:absolute;left:50%;top:50%;width:calc(var(--stick)*.42);height:calc(var(--stick)*.42);margin:calc(var(--stick)*-.21);border-radius:50%;background:rgba(88,214,255,.45);border:2px solid var(--cyan);pointer-events:none}
+.yaw{display:flex;gap:calc(8px*var(--tcs));padding-bottom:calc(8px*var(--tcs))}
+.tbtn{position:relative;width:calc(52px*var(--tcs));height:calc(52px*var(--tcs));border-radius:50%;background:var(--glass);border:1px solid var(--line-2);font:700 calc(14px*var(--tcs)) var(--ui);padding:0}
+.tbtn:active,.tbtn.down,.quick button:active{background:var(--cyan);color:var(--ink)}
+.tthr{position:relative;flex:none;width:calc(56px*var(--tcs));height:calc(176px*var(--tcs));border-radius:18px;background:var(--glass);border:1px solid var(--line-2);overflow:hidden;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.tthr span{position:absolute;top:7px;width:100%;text-align:center;font-size:calc(10.5px*var(--tcs));z-index:2;color:var(--dim)}
+.tthr output{position:absolute;top:calc(22px*var(--tcs));width:100%;text-align:center;font:700 calc(12px*var(--tcs)) var(--num);z-index:2;color:var(--txt)}
+.tthr .ticks{position:absolute;inset:0;z-index:1;background:repeating-linear-gradient(to top,transparent 0,transparent calc(25% - 1px),var(--line-2) calc(25% - 1px),var(--line-2) 25%)}
+.tthr .fill{position:absolute;left:0;right:0;bottom:0;background:rgba(88,214,255,.4);border-top:2px solid var(--cyan)}
+.tthr .fill.rev{background:rgba(255,189,69,.35);border-top-color:var(--amber)}
+.tc-rc{display:flex;flex-direction:column;align-items:flex-end;gap:calc(8px*var(--tcs))}
+.quick{display:grid;grid-template-columns:repeat(3,calc(54px*var(--tcs)));gap:calc(6px*var(--tcs));pointer-events:none}
+.quick button{height:calc(42px*var(--tcs));border-radius:12px;background:var(--glass);border:1px solid var(--line-2);font-size:calc(11.5px*var(--tcs));line-height:1.1;padding:0 2px;display:grid;place-content:center;gap:1px;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.quick button small{font-size:calc(9px*var(--tcs));color:var(--dim)}
+.quick button:active small{color:var(--ink)}
+.quick button.on{border-color:var(--green);color:var(--green)}.quick button.on small{color:var(--green)}
+.quick button[data-tone=warn].on{border-color:var(--amber);color:var(--amber)}
+.tbtn.big{width:100%;height:calc(46px*var(--tcs));border-radius:14px;border-color:var(--red);color:#ffd9d8;font-size:calc(14px*var(--tcs))}
+body.on-foot .tbtn.big{border-color:var(--cyan);color:var(--txt)}
+body.on-foot .tthr,body.on-foot .yaw,body.in-vehicle .tthr,body.in-vehicle .yaw{display:none}
+body.on-foot #idPlate .sub,body.in-vehicle #idPlate .sub{visibility:hidden}
 
 /* ---------- menu ------------------------------------------------------------------------------------ */
 #menu{position:fixed;inset:0;display:grid;place-items:center;background:rgba(3,10,15,.5);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);pointer-events:auto;z-index:30;touch-action:auto}
 #menu[hidden]{display:none}
-.sheet{width:min(940px,calc(100vw - 24px));height:min(600px,calc(100vh - 24px));display:grid;grid-template-columns:176px 1fr;background:var(--glass-strong);border:1px solid var(--line-2);border-radius:20px;overflow:hidden}
+.sheet{width:min(940px,calc(100vw - 24px));height:min(600px,calc(100vh - 24px));height:min(600px,calc(100dvh - 24px));display:grid;grid-template-columns:176px 1fr;background:var(--glass-strong);border:1px solid var(--line-2);border-radius:20px;overflow:hidden}
 .rail{display:flex;flex-direction:column;gap:2px;padding:18px 12px;border-right:1px solid var(--line)}
 .rail h1{font-size:15px;margin:0 8px 14px;line-height:1.2}
 .rail h1 small{display:block;color:var(--dim);font-weight:400;font-size:11px;margin-top:3px}
@@ -168,7 +195,6 @@ input[type=range]{accent-color:var(--cyan);height:28px;width:100%}
 #footInfo{align-self:center;display:flex;gap:14px;align-items:baseline;padding:7px 18px;border-radius:99px;font-size:13px}
 #footInfo b{font:700 14px var(--num)}#footInfo span{color:var(--dim)}
 body.on-foot #pfd,body.on-foot #systems,body.in-vehicle #pfd,body.in-vehicle #systems,body.cockpit-view #pfd{display:none}
-body.on-foot #idPlate .sub,body.in-vehicle #idPlate .sub{visibility:hidden}
 
 /* ---------- compact layout (phones / short windows) --------------------------------------------------- */
 body.compact #topbar{gap:6px}
@@ -182,16 +208,84 @@ body.compact #systems .row{grid-template-columns:40px 1fr auto;gap:6px}
 body.compact #systems .row.thr{display:none}
 body.compact #ladder{height:22px}body.compact #ladder span{line-height:20px;font-size:11px}
 body.compact #flapNote{margin-left:46px}
-body.compact #dock{width:clamp(180px,calc(100vw - 590px),300px)}
+body.compact #dock{width:clamp(180px,calc(100vw - 520px),300px)}
 body.compact #map:not(.big){top:calc(56px + var(--st));bottom:auto;width:96px!important;height:96px!important}
-body.compact .stick{width:124px;height:124px}body.compact .thr{height:150px;width:54px}body.compact .tbtn{width:52px;height:52px}
-body.compact #yawL{left:calc(170px + var(--sl))}body.compact #yawR{left:calc(230px + var(--sl))}body.compact #brk{right:calc(96px + var(--sr))}
-body.compact .quick{bottom:calc(90px + var(--sb));right:calc(96px + var(--sr))}
 @media (max-width:520px){body.compact #dock{display:none}}
 @media (max-width:760px){
-  .sheet{grid-template-columns:1fr;grid-template-rows:auto 1fr;width:100vw;height:100vh;border-radius:0}
+  .sheet{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);width:100vw;height:100vh;height:100dvh;border-radius:0;padding:var(--st) var(--sr) var(--sb) var(--sl);box-sizing:border-box}
   .rail{flex-direction:row;overflow-x:auto;padding:10px;border-right:0;border-bottom:1px solid var(--line);align-items:center}
   .rail h1{display:none}.rail .grow{display:none}.rail .tab{white-space:nowrap}.rail .go{margin-left:auto;padding:8px 16px}
   .mbody{padding:16px}.field{grid-template-columns:1fr 56px;gap:4px 10px}.field label{grid-column:1/-1}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- start screen ------------------------------------------------------------------------------
+   Static markup lives in index.html so it paints before any script runs. Ids: spBar (progress), spReady (filled in by Splash.js). */
+#splash{position:fixed;inset:0;z-index:25;display:grid;place-items:center;pointer-events:auto;touch-action:auto;box-sizing:border-box;padding:calc(12px + var(--st)) calc(12px + var(--sr)) calc(12px + var(--sb)) calc(12px + var(--sl));transition:opacity .5s ease}
+#splash.leaving{opacity:0;pointer-events:none}
+.sp-bg{position:absolute;inset:0;background:radial-gradient(130% 85% at 50% 112%,#16566f 0%,#0a2a3a 40%,#04111a 82%);transition:opacity .8s ease}
+.sp-bg::after{content:"";position:absolute;left:0;right:0;top:64%;height:1px;background:linear-gradient(90deg,transparent,rgba(88,214,255,.5),transparent)}
+#splash.ready .sp-bg{opacity:0}
+.sp-card{position:relative;width:min(540px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:26px 30px 28px;border-radius:22px;background:rgba(6,18,25,.84);border:1px solid var(--line-2);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.sp-mark{margin:0;font:700 44px/1 var(--ui);letter-spacing:.01em}
+.sp-sub{margin:7px 0 0;color:var(--dim);font-size:13px}
+.sp-steps{list-style:none;margin:22px 0 14px;padding:0;display:grid;gap:9px;font-size:13.5px}
+.sp-steps li{display:flex;align-items:center;gap:11px;color:var(--dim)}
+.sp-steps li::before{content:"";width:12px;height:12px;border-radius:50%;border:2px solid var(--line-2);box-sizing:border-box;flex:none}
+.sp-steps li[data-state=active]{color:var(--txt)}
+.sp-steps li[data-state=active]::before{border-color:var(--cyan);background:radial-gradient(var(--cyan) 38%,transparent 42%)}
+.sp-steps li[data-state=done]::before{border-color:var(--green);background:var(--green)}
+.sp-bar{height:4px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
+.sp-bar i{display:block;height:100%;width:6%;background:var(--cyan);border-radius:99px;transition:width .35s ease}
+#splash.ready .sp-steps,#splash.ready .sp-bar{display:none}
+#spReady{display:grid;gap:18px;margin-top:20px}
+#spReady[hidden]{display:none}
+.sp-where{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:11px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sp-where b{font-size:16px}.sp-where span{color:var(--dim);font-size:12.5px;text-align:right}
+.sp-keys{display:grid;grid-template-columns:1fr 1fr;gap:9px 24px;margin:0;padding:0;list-style:none;font-size:13px}
+.sp-keys li{display:flex;align-items:center;gap:10px;min-width:0}
+.sp-keys kbd{flex:none;min-width:20px;text-align:center;font:12px var(--num);padding:1px 7px;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:6px;color:var(--cyan)}
+.sp-keys li>span:last-child{color:var(--dim)}
+.sp-act{display:flex;gap:10px;flex-wrap:wrap}
+#splash .sp-go{flex:1 1 180px;min-height:52px;border-radius:14px;border:0;background:var(--cyan);color:var(--ink);font:700 18px var(--ui)}
+#splash .sp-alt{min-height:52px;padding:0 18px;border-radius:14px;border:1px solid var(--line-2);background:none;font:inherit}
+#splash .sp-go:hover,#splash .sp-alt:hover{filter:brightness(1.12)}
+.sp-note{margin:0;color:var(--dim);font-size:12px}
+.sp-fail{display:none;margin-top:18px;padding:14px 16px;border:1px solid var(--red);border-radius:12px;background:rgba(48,10,10,.7);font-size:13px}
+.sp-fail p{margin:6px 0}#splash.failed .sp-fail{display:block}#splash.failed .sp-steps,#splash.failed .sp-bar{display:none}
+#splash .sp-fail button{margin-top:4px;min-height:40px;padding:0 18px;border-radius:10px;border:1px solid var(--red);background:none}
+@media (max-height:480px) and (orientation:landscape){
+  .sp-card{display:grid;grid-template-columns:minmax(150px,.7fr) 1.3fr;gap:6px 26px;padding:18px 22px;width:min(760px,100%)}
+  .sp-mark{font-size:34px}.sp-steps{margin:0 0 12px}#spReady{margin-top:0;gap:12px}.sp-keys{gap:6px 18px}
+  #splash .sp-go,#splash .sp-alt{min-height:46px}
+}
+body.coarse .sp-keys{grid-template-columns:1fr}
+
+/* ---------- rotate-your-phone overlay -------------------------------------------------------------------- */
+#rotate{position:fixed;inset:0;z-index:40;display:none;place-items:center;align-content:center;gap:14px;text-align:center;padding:24px;background:rgba(3,10,15,.95);pointer-events:auto;touch-action:none}
+body.portrait-block #rotate{display:grid}
+#rotate svg{width:84px;height:84px;stroke:var(--cyan);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;animation:rotPhone 2.6s ease-in-out infinite}
+#rotate b{font-size:18px}#rotate span{color:var(--dim);font-size:13px;max-width:30ch}
+@keyframes rotPhone{0%,25%{transform:rotate(0)}65%,100%{transform:rotate(-90deg)}}
+
+/* ---------- flight coach + actionable alerts ----------------------------------------------------------- */
+#coach{align-self:center;display:flex;align-items:center;gap:10px;padding:5px 6px 5px 16px;border-radius:99px;font-size:13px;border-color:var(--cyan);max-width:100%}
+#coach[hidden]{display:none}
+#coach kbd{font:700 12px var(--num);background:var(--cyan);color:var(--ink);border-radius:6px;padding:2px 7px;white-space:nowrap}
+#coach .x{width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.08);font-size:16px;line-height:1;padding:0;flex:none}
+#coach .x:hover{background:rgba(255,255,255,.18)}
+button.alert{font:700 13px var(--ui);cursor:pointer;pointer-events:auto;display:flex;gap:10px;align-items:center}
+button.alert kbd{font:700 11px var(--num);background:var(--red);color:var(--ink);border-radius:5px;padding:1px 6px}
+body.coarse #coach{font-size:12px;padding-left:12px}
+
+/* ---------- damage report (shown by HUD while parts are damaged) ----------------------------------------- */
+#dmg{position:absolute;right:calc(12px + var(--sr));top:calc(66px + var(--st));width:116px;padding:8px 8px 6px;border-radius:12px;text-align:center}
+#dmg[hidden]{display:none}
+#dmg svg{width:100%;display:block}
+#dmg .p{fill:rgba(255,255,255,.14);stroke:var(--line-2);stroke-width:1}
+#dmg .p.warn{fill:rgba(255,189,69,.55);stroke:var(--amber)}
+#dmg .p.bad{fill:rgba(255,93,90,.7);stroke:var(--red)}
+#dmg .p.gone{fill:none;stroke:var(--red);stroke-dasharray:3 3}
+#dmg small{display:block;font-size:10.5px;color:var(--dim);margin-top:2px}
+body.compact #dmg{top:calc(160px + var(--st));width:84px;padding:5px}
+body.hud-min #dmg,body.hud-off #dmg,body.on-foot #dmg,body.in-vehicle #dmg{display:none}

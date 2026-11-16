@@ -19,8 +19,8 @@ export class FlightModel {
     const dyn = 0.5 * rho * V * V, S = f.wingArea, eff = clamp((V / f.vRef) ** 2, 0, 1.5), effS = Math.min(eff, 1);
     const st = f.aoaStall, post = 1 - clamp((Math.abs(aoa) - st) / 0.2, 0, 1) * 0.6;
     const cl = (f.CL0 + f.CLa * clamp(aoa, -st, st) + f.flapCL * ac.flapPos) * post * (1 - 0.4 * c.spoiler) * ac.liftScale;
-    const cd = f.CD0 + f.k * cl * cl + ac.gearPos * f.gearCD + ac.flapPos * f.flapCD + c.spoiler * f.spoilerCD + (1 - post) * 0.8;
-    let thrust = c.throttle * f.maxThrust * Math.max(0.15, 1 - V / f.thrustFalloff);
+    const cd = f.CD0 + f.k * cl * cl + ac.gearPos * f.gearCD + ac.flapPos * f.flapCD + c.spoiler * f.spoilerCD + (1 - post) * 0.8 + ac.dragExtra;
+    let thrust = c.throttle * f.maxThrust * ac.thrustScale * Math.max(0.15, 1 - V / f.thrustFalloff);
     if (ac.jatoLeft > 0) { thrust += f.jato.thrust; ac.jatoLeft -= dt; }
     if (c.reverse && ac.onGround) thrust *= -f.reverseFactor;
 
@@ -47,11 +47,13 @@ export class FlightModel {
       ac.onGround = true;
       _e.setFromQuaternion(q);
       if (ac.pos.y < gy) {
-        if (!was) { // first contact: impact speed along terrain normal (covers hillsides), wing-strike if banked
+        if (!was) { // first contact: impact speed along the terrain normal (covers hillsides). Wing / nose / tail strikes are CollisionSystem's job (airframe probes)
           const d = 20, x = ac.pos.x, z = ac.pos.z;
           _n.set((world.groundHeight(x - d, z) - world.groundHeight(x + d, z)) / (2 * d), 1, (world.groundHeight(x, z - d) - world.groundHeight(x, z + d)) / (2 * d)).normalize();
-          let hit = -ac.vel.dot(_n); if (Math.abs(_e.z) > 0.4 && V > 15) hit = Math.max(hit, f.crashSink * 2);
-          if (hit > f.crashSink) ac.bus?.emit('aircraft:impact', { ac, speed: hit });
+          const hit = -ac.vel.dot(_n);
+          if (ac.airTime > 2.5) ac.bus?.emit('aircraft:touchdown', { ac, sink: Math.max(0, hit), speed: V }); // a real landing, not a bounce or a hop
+          ac.airTime = 0;
+          if (hit > f.crashSink) ac.bus?.emit('aircraft:impact', { ac, speed: hit, part: 'gear', kind: 'ground' });
         }
         ac.pos.y = gy; if (ac.vel.y < 0) ac.vel.y = 0;
       }
@@ -69,7 +71,7 @@ export class FlightModel {
       q.setFromEuler(_e);
       if (_e.x <= 0 && w.x < 0) w.x = 0; w.z = 0;
     }
-    if (!ac.onGround) { ac.bump = 0; ac.surface = null; }
+    if (!ac.onGround) { ac.bump = 0; ac.surface = null; ac.airTime += dt; }
     ac.telemetry.airspeed = V; ac.telemetry.aoa = aoa; ac.telemetry.cl = cl;
   }
 }

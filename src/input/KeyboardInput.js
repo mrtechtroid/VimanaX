@@ -19,8 +19,10 @@ export class KeyboardInput {
   setBindings(b) { this.map = effectiveMap(b); }
   init(bus) {
     addEventListener('keydown', e => {
-      if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'Backspace'].includes(e.code)) e.preventDefault();
-      if (document.body.classList.contains('menu-open') && e.code !== 'Escape') return; // menu has focus
+      const B = document.body.classList; if (B.contains('splash-open')) return; // start screen has focus: Tab / Space / Enter must reach its buttons
+      const menu = B.contains('menu-open'); // the menu keeps native Tab / Space / arrow behaviour; only Esc closes it from here
+      if (!menu && ['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'Backspace'].includes(e.code)) e.preventDefault();
+      if (menu && e.code !== 'Escape') return;
       if (e.repeat) return; this.k.add(e.code); if (this.map[e.code]) bus.emit('action', this.map[e.code]);
     });
     addEventListener('keyup', e => this.k.delete(e.code)); addEventListener('blur', () => this.k.clear());

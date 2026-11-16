@@ -4,14 +4,15 @@ import { Terrain } from './Terrain.js';
 import { TerrainRenderer } from './TerrainRenderer.js';
 import { Scenery } from './Scenery.js';
 import { layoutAirport, pavedAt, buildAirport } from './Airports.js';
+import { Colliders } from './Colliders.js';
 
 /**
  * Finite procedural archipelago: heightfield (Terrain) + chunked LOD renderer + airports + towns/roads.
- * Public API used by physics/systems: heightAt, groundHeight (incl. water surface), surfaceAt, isWater, spawnPoint, cfg.
+ * Public API used by physics/systems: heightAt, groundHeight (incl. water surface), surfaceAt, isWater, spawnPoint, cfg, colliders.
  */
 export class World {
   constructor(cfg) {
-    this.cfg = cfg; this.terrain = new Terrain(cfg); this.bounds = cfg.size / 2;
+    this.cfg = cfg; this.terrain = new Terrain(cfg); this.bounds = cfg.size / 2; this.colliders = new Colliders(); // solid statics (buildings, hangars, tower, tanks, trees)
     for (const a of cfg.airports) a._lay = layoutAirport(a);
   }
   heightAt(x, z) { return this.terrain.heightAt(x, z); }
@@ -37,8 +38,8 @@ export class World {
     return { pos: new THREE.Vector3(a.x - Math.sin(r) * s, a.elev, a.z + Math.cos(r) * s), heading: r };
   }
   init(e) {
-    this.e = e; this.renderer = new TerrainRenderer(this.terrain, e.scene); this.scenery = new Scenery(this.terrain, e.scene);
-    this.airportGroups = this.cfg.airports.map(a => buildAirport(a, a._lay, e.scene));
+    this.e = e; this.renderer = new TerrainRenderer(this.terrain, e.scene, { colliders: this.colliders }); this.scenery = new Scenery(this.terrain, e.scene, this.colliders);
+    this.airportGroups = this.cfg.airports.map(a => buildAirport(a, a._lay, e.scene, this.colliders));
     const sp = this.spawnPoint(); this.renderer.update(sp.pos, true);
   }
   update(dt, e) {

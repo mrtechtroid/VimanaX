@@ -122,7 +122,7 @@ export class CameraManager {
   }
   /** Turbulence / rough-ground shake, applied in camera space. */
   shake(dt, a, k) {
-    const e = this.e, cam = e.camera, amp = e.settings.get('cameraShake') * k * (0.012 * (e.env.intensity || 0) + 0.5 * Math.abs(a.bump || 0)); if (amp < 1e-4) return; const t = e.time;
+    const e = this.e, cam = e.camera, amp = e.settings.get('cameraShake') * k * (0.012 * (e.env.intensity || 0) + 0.5 * Math.abs(a.bump || 0) + 0.12 * (a.kick || 0)); if (amp < 1e-4) return; const t = e.time;
     _a.set(Math.sin(t * 37) * amp, Math.sin(t * 29 + 1) * amp, 0).applyQuaternion(cam.quaternion); cam.position.add(_a); _l.setFromEuler(_e.set(Math.sin(t * 17) * amp * 0.6, 0, Math.sin(t * 23 + 2) * amp * 0.9)); cam.quaternion.multiply(_l);
   }
   /** Blend from the previous viewpoint after a seat / mode / subject change, then apply FOV. */

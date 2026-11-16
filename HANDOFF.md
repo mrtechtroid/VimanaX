@@ -106,3 +106,32 @@ Tests: `tests/canvas-stub.mjs` gives jsdom a no-op 2D canvas (the `canvas` packa
 - New vehicle: add to `VEHICLES` in `CargoSystem.js` (and a `glb` entry in `core/Assets.js`), add to the spawn list in `init`.
 - New surface: `world/Surfaces.js`; set `surface` on an airport in `config/worldConfig.js`.
 - New menu tab / camera mode: see v0.2 notes in `Menu.js` (`r_<id>`, `w_<id>`) and `CAMERA_MODES`.
+
+
+---
+
+## v0.5 changes (UX, collisions and damage, environment)
+
+**None of this was executed.** It was written by reading code only: no tests, no browser, no server. Run `npm test` first, then open the app in a real browser and on a phone. Things most likely to need a tweak are marked below.
+
+### 1. Interface (web + mobile)
+- **Start screen** (`index.html` markup, `src/ui/Splash.js`): painted before any JS runs, ticks off boot stages (`main.js` now boots in stages), then shows aircraft, airport, runway, controls and a **Fly** button. That tap unlocks audio, goes fullscreen + landscape lock on phones, and requests a screen wake lock. `?autostart` skips it (jsdom skips it automatically). Shows a failure panel if WebGL or the CDN is unavailable.
+- **Pause holds** (`Engine.hold(reason)`): start screen, portrait phone (rotate overlay) and hidden tab each pause independently of the menu's `paused` flag. Audio suspends when the tab is hidden.
+- **Touch controls rewritten** (`TouchControls.js`): floating stick with expo curve, magnetic power slider with detents, context-aware action grid (flight, flight "More", on foot, vehicle), jump / run on foot, left-handed layout, size and opacity settings, haptics. Menu > Controls has the options; Menu "Keys" tab becomes "Touch" on phones.
+- **Flight coach** (`src/ui/Coach.js`): one hint at a time (power, rotate, gear up, explore, gear down, flare, brake). Follows key bindings. Dismissible; Menu > Controls > Flight tips.
+- Crash alert is now a button (tap / click to reset). Touchdown quality toast ("Smooth touchdown: 120 ft/min"). HUD mode toast. Menu title fixed, `100dvh`, safe areas, focus trap, Tab/Space no longer swallowed.
+- **CSS bugs fixed:** `#hud button{...}` had ID specificity and overrode every class-level button rule (now `:where(#hud)`); the touch `.thr` rule also matched the HUD's Throttle row (touch slider is now `.tthr`).
+- `manifest.webmanifest` + `assets/icon.svg` (fullscreen, landscape when installed). PNG icons would still be needed for some installers.
+
+### 2. Collisions and damage
+- `src/world/Colliders.js`: spatial hash of solids. Fed by `Scenery` (houses, tower blocks), `Airports` (terminal, hangars, tower, tanks) and `TerrainRenderer` (trees, only while their chunk exists; struck trees disappear).
+- `src/systems/CollisionSystem.js`: airframe probes (nose, wings, tail, body, gear legs) swept each frame against terrain, water and colliders. Push-out, bounce / tree yielding, sliding friction, spin from the hit point, sparks, dust, camera kick. The old "banked + fast = crash" shortcut in `FlightModel` is gone; wingtip probes cover it.
+- `DamageSystem` rewritten: per-zone health `ac.dmg = {engine, wingL, wingR, tail, gear, body}`. Severity comes from approach speed, obstacle kind and `crashSink`. Zones drive thrust, lift, roll bias, control authority, drag and gear. Parts shed at 0, engines smoke then burn, wrecks burn for 40 s. All impacts use the `aircraft:impact` event `{ac, speed, part, kind}`.
+- `Effects.js` (pooled smoke / fire / sparks / leaves / dust), HUD damage panel + specific alerts, severity-scaled crash audio.
+- `tests/collision.mjs` (pure unit tests, in `npm test`).
+- **Tune first:** probe placement (`makeProbes`), `KIND` factors and thresholds in `DamageSystem`. Watch `tests/fleet.mjs`: a probe that clips terrain or an apron structure during a take-off run would show up there.
+
+### 3. Environment and lighting
+- Sky shader: sunrise / sunset glow, anti-twilight belt, moon, twinkling stars, dithering. Moonlight, aircraft **landing light** (Lights switch), lit town windows at night, redder low sun, gentler fog ramp, cloud forward-scatter glow.
+- **Filmic tone mapping** with exposure that rises at night (World > Picture; off = old look). Light intensities were tuned for no tone mapping, so exposure (`applyTone`) may need adjusting.
+- **Time flow** (World > Clock): paused / real time / 1 min = 1 h / 6 s = 1 h. `env.hour` can be fractional; use `env.fmtHour()`.

@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { WEATHER } from './Environment.js';
 const SPAN = 28000, HALF = SPAN / 2, TAU = Math.PI * 2;
-const VS = `attribute vec3 aOff; attribute float aScale; attribute float aShade; uniform vec3 uCam, uDrift; varying vec2 vUv; varying float vShade, vFade, vDist;
+const VS = `attribute vec3 aOff; attribute float aScale; attribute float aShade; uniform vec3 uCam, uDrift; varying vec2 vUv; varying float vShade, vFade, vDist; varying vec3 vView;
 void main(){ vec3 p = aOff + uDrift; p.xz = mod(p.xz - uCam.xz + ${HALF.toFixed(1)}, ${SPAN.toFixed(1)}) - ${HALF.toFixed(1)} + uCam.xz;
-  vec4 mv = modelViewMatrix * vec4(p, 1.0); float d = length(mv.xyz); mv.xy += position.xy * aScale; gl_Position = projectionMatrix * mv; vUv = uv; vShade = aShade; vDist = d;
+  vView = normalize(p - uCam); vec4 mv = modelViewMatrix * vec4(p, 1.0); float d = length(mv.xyz); mv.xy += position.xy * aScale; gl_Position = projectionMatrix * mv; vUv = uv; vShade = aShade; vDist = d;
   vFade = smoothstep(110.0, 420.0, d) * (1.0 - smoothstep(9000.0, 13500.0, d)); }`;
-const FS = `uniform sampler2D uMap; uniform vec3 uLit, uShadow, uFog; uniform float uOpacity; varying vec2 vUv; varying float vShade, vFade, vDist;
-void main(){ float a = texture2D(uMap, vUv).a; vec3 c = mix(uShadow, uLit, vShade); c = mix(c, uFog, smoothstep(3000.0, 13000.0, vDist) * 0.7); gl_FragColor = vec4(c, a * uOpacity * vFade); if (gl_FragColor.a < 0.003) discard; }`;
+const FS = `uniform sampler2D uMap; uniform vec3 uLit, uShadow, uFog, uSunDir; uniform float uOpacity; varying vec2 vUv; varying float vShade, vFade, vDist; varying vec3 vView;
+void main(){ float a = texture2D(uMap, vUv).a; vec3 c = mix(uShadow, uLit, vShade);
+  c += uLit * pow(max(dot(normalize(vView), uSunDir), 0.0), 5.0) * 0.45 * (0.4 + 0.6 * vShade);
+  /* silver lining: clouds glow when you look toward the sun through them */ c = mix(c, uFog, smoothstep(3000.0, 13000.0, vDist) * 0.7); gl_FragColor = vec4(c, a * uOpacity * vFade); if (gl_FragColor.a < 0.003) discard; }`;
 const rnd = (() => { let s = 1337; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
 const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 0.75;
 
@@ -28,7 +30,7 @@ export class Clouds {
   constructor() { this.clusters = []; this.puffs = []; this.drift = new THREE.Vector3(); this.sortT = 0; this.weather = null; this.inside = 0; }
   init(e) {
     this.e = e; this.tex = puffTexture();
-    this.mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: this.tex }, uLit: { value: new THREE.Color(1, 1, 1) }, uShadow: { value: new THREE.Color(.6, .65, .72) }, uFog: { value: new THREE.Color() }, uOpacity: { value: 0.9 }, uCam: { value: new THREE.Vector3() }, uDrift: { value: this.drift } } });
+    this.mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: this.tex }, uLit: { value: new THREE.Color(1, 1, 1) }, uShadow: { value: new THREE.Color(.6, .65, .72) }, uFog: { value: new THREE.Color() }, uOpacity: { value: 0.9 }, uCam: { value: new THREE.Vector3() }, uDrift: { value: this.drift }, uSunDir: { value: e.env.sunDir } } });
     this.strat = new THREE.Mesh(new THREE.PlaneGeometry(60000, 60000).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: stratusTexture(), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false })); this.strat.renderOrder = -50; this.strat.visible = false; e.scene.add(this.strat);
     this.build(e.env.weather);
   }

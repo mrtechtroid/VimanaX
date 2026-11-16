@@ -5,7 +5,7 @@ const WALLS = [0xf1ece0, 0xe6d9c0, 0xd9c7a8, 0xf4f1ea, 0xcfd8dc, 0xe8c9a0, 0xb8c
 const prismGeo = (w, h, l) => { const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, h)]), g = new THREE.ExtrudeGeometry(s, { depth: l, bevelEnabled: false }); g.translate(0, 0, -l / 2); return g; };
 
 export class Scenery {
-  constructor(T, scene) { this.T = T; this.scene = scene; this.group = new THREE.Group(); scene.add(this.group); this.roads = []; this.buildTowns(); this.buildRoads(); }
+  constructor(T, scene, colliders = null) { this.T = T; this.scene = scene; this.col = colliders; this.group = new THREE.Group(); scene.add(this.group); this.roads = []; this.buildTowns(); this.buildRoads(); }
 
   /** Is (x,z) buildable? */
   ok(x, z) { const T = this.T, h = T.heightAt(x, z); return h > 3 && h < 140 && T.slopeAt(x, z) < 0.16 && !T.nearRiver(x, z) && !T.isWater(x, z) && !T.cfg.airports.some(a => Math.hypot(a.x - x, a.z - z) < a.length * 0.5 + 280); }
@@ -25,6 +25,11 @@ export class Scenery {
       // main street cross
       for (const horiz of [0, 1]) { const pts = []; for (let s = -R * 1.05; s <= R * 1.05; s += 22) { const x = t.x + (horiz ? s * ca : -s * sa), z = t.z + (horiz ? s * sa : s * ca); pts.push({ x, z }); } this.roads.push({ pts, w: 8, town: true }); }
     }
+    // Solid footprints. Houses include half of the roof's height; the instance matrices below use width axis (cos a, sin a).
+    if (this.col) {
+      for (const b of houses) this.col.addBox({ x: b.x, z: b.z, c: Math.cos(b.a), s: Math.sin(b.a), hw: b.w / 2, hl: b.l / 2, y0: b.y - 0.3, y1: b.y - 0.3 + b.h + (2 + b.w * 0.18) * 0.5, kind: 'building' });
+      for (const b of blocks) this.col.addBox({ x: b.x, z: b.z, c: Math.cos(b.a), s: Math.sin(b.a), hw: b.w / 2, hl: b.l / 2, y0: b.y - 0.3, y1: b.y - 0.3 + b.h, kind: 'building' });
+    }
     const wallM = new THREE.MeshStandardMaterial({ roughness: 0.9 }), roofM = new THREE.MeshStandardMaterial({ roughness: 0.8 }), glassM = new THREE.MeshStandardMaterial({ color: 0x9fb4c4, roughness: 0.25, metalness: 0.5 });
     const mk = (geo, mat, n) => new THREE.InstancedMesh(geo, mat, Math.max(n, 1)), unit = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     if (houses.length) {
@@ -37,7 +42,21 @@ export class Scenery {
       blocks.forEach((b, i) => { q.setFromAxisAngle(up, -b.a); p.set(b.x, b.y - 0.3, b.z); s.set(b.w, b.h, b.l); M.compose(p, q, s); bm.setMatrixAt(i, M); bm.setColorAt(i, c.setHSL(0.55 + hash2(i, 1, 2) * 0.1, 0.12, 0.62 + hash2(i, 2, 2) * 0.2)); });
       bm.castShadow = bm.receiveShadow = true; this.group.add(bm);
     }
+    // Lit windows for night: thin emissive panels on the building faces, one instanced mesh, invisible by day. Environment drives setDark().
+    {
+      const W = [], M = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), cs = new THREE.Color();
+      const put = (b, lx, ly, lz, sx) => { const ca = Math.cos(b.a), sa = Math.sin(b.a); q.setFromAxisAngle(up, -b.a); p.set(b.x + lx * ca - lz * sa, b.y - 0.3 + ly, b.z + lx * sa + lz * ca); s.set(sx, 0.9, 0.1); M.compose(p, q, s); W.push(M.clone()); };
+      houses.forEach((b, i) => { if (hash2(i, 5, 31) < 0.3) return; for (const f of [-1, 1]) if (hash2(i, f + 2, 32) > 0.45) put(b, (hash2(i, f + 2, 33) - 0.5) * b.w * 0.5, 1.6, f * (b.l / 2 + 0.06), 1.5); });
+      blocks.forEach((b, i) => { const rows = Math.floor(b.h / 3.6), cols = Math.max(2, Math.floor(b.w / 3.4)); for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) for (const f of [-1, 1]) if (hash2(i * 97 + r, k * 7 + f + 2, 34) > 0.62 && W.length < 14000) put(b, (k - (cols - 1) / 2) * 3.4, 2.2 + r * 3.6, f * (b.l / 2 + 0.06), 1.6); });
+      if (W.length) {
+        const wm = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }), W.length), pal = [0xffd98a, 0xffe6b0, 0xffc870, 0xcfe0ff];
+        W.forEach((m, i) => { wm.setMatrixAt(i, m); wm.setColorAt(i, cs.setHex(pal[Math.floor(hash2(i, 9, 35) * 4) % 4])); });
+        wm.visible = false; wm.frustumCulled = false; this.win = wm; this.group.add(wm);
+      }
+    }
   }
+  /** 0 = daylight .. 1 = dark: fades the window lights in after sunset. */
+  setDark(d) { const m = this.win; if (!m) return; const o = THREE.MathUtils.clamp((d - 0.15) / 0.45, 0, 1); m.visible = o > 0.01; m.material.opacity = o; }
 
   /** Greedy route-finder that hugs low-slope dry land; returns polyline or null. */
   route(a, b) {

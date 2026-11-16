@@ -30,7 +30,7 @@ export class WalkSystem {
     addEventListener('keyup', ev => this.keys.delete(ev.code)); addEventListener('blur', () => this.keys.clear());
     document.addEventListener('mousemove', ev => { if (document.pointerLockElement === e.renderer.domElement && this.mode === 'foot') this.look(-ev.movementX * 0.0022, -ev.movementY * 0.0022); });
     e.renderer.domElement.addEventListener('click', () => { if (this.mode === 'foot' && !this.third && !document.body.classList.contains('coarse') && !document.pointerLockElement) e.renderer.domElement.requestPointerLock?.(); });
-    e.bus.on('action', a => { if (a === 'interact' || a === 'drive') this.interact(); else if (a === 'door') this.toggleDoor(); else if (a === 'camera' && this.mode === 'foot') { this.third = !this.third; say(this.third ? 'Third person' : 'First person'); } });
+    e.bus.on('action', a => { if (a === 'interact' || a === 'drive') this.interact(); else if (a === 'door') this.toggleDoor(); else if (a === 'camera' && this.mode === 'foot') { this.third = !this.third; say(this.third ? 'Third person' : 'First person'); } else if (a === 'jump' && this.mode === 'foot' && this.grounded && !e.paused) this.vy = 4.2; }); // 'jump' = touch button (keyboard uses Space directly)
     e.bus.on('aircraft:spawn', () => this.reset());
     e.bus.on('assets:loaded', id => { if (id === 'soldier') this.upgradeAvatar(); }); this.upgradeAvatar();
   }
@@ -114,7 +114,7 @@ export class WalkSystem {
     if (this.closeTimer != null && (this.closeTimer -= dt) <= 0) { this.closeTimer = null; ac?.mesh.userData.parts.doors.forEach(d => { if (d.enter === this.seat || d.enter === 'pilot') d.target = 0; }); }
     if (this.mode !== 'foot') { this.prompt = null; this.updateAvatar(dt); if (this.mode === 'aircraft' && ac) this.quat.copy(ac.quat); return; }
     if (e.paused) return;
-    const s = e.input.state, g = (navigator.getGamepads?.() || [])[0], sprint = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+    const s = e.input.state, g = (navigator.getGamepads?.() || [])[0], sprint = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || !!this.touchSprint;
     if (g && Math.abs(g.axes[2]) > 0.15) this.look(-g.axes[2] * dt * 2.2, 0);
     let fwd = -s.pitch, str = s.roll; const l = Math.hypot(fwd, str); if (l > 1) { fwd /= l; str /= l; }
     const top = sprint ? 5.2 : 1.9, sy = Math.sin(this.yaw), cy = Math.cos(this.yaw); // forward = (-sin, -cos), right = (cos, -sin)

@@ -1,0 +1,12 @@
+{
+  "name": "VimanaX",
+  "short_name": "VimanaX",
+  "description": "A free flight simulator that runs in your browser.",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#05131a",
+  "theme_color": "#0a1b24",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

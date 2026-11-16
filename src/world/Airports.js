@@ -30,7 +30,7 @@ export function layoutAirport(a) {
 /** Is local point (across, behind) on any paved rect? Returns the rect's kind or null. */
 export function pavedAt(lay, lx, lz, margin = 0) { for (const r of lay.paved) if (lx >= r.x0 - margin && lx <= r.x1 + margin && lz >= r.z0 - margin && lz <= r.z1 + margin) return r.kind; return null; }
 
-export function buildAirport(a, lay, scene) {
+export function buildAirport(a, lay, scene, col = null) {
   if (a.water) return buildWaterBase(a, scene);
   const g = new THREE.Group(), L = a.length, W = a.width, kind = lay.kind, s = lay.side; g.position.set(a.x, a.elev + 0.06, a.z); g.rotation.y = -a.heading * Math.PI / 180;
   for (const r of lay.paved) pave(g, r, r.kind === 'asphalt' ? MATS.asphalt : r.kind === 'taxi' ? MATS.taxi : r.kind === 'apron' ? MATS.apron : MATS[r.kind] || MATS.asphalt, r.kind === 'apron' ? 0.01 : r.kind === 'taxi' ? 0.005 : 0.02);
@@ -55,16 +55,20 @@ export function buildAirport(a, lay, scene) {
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 7, 6), MATS.white); pole.position.set(-s * (W / 2 + 25), 3.5, -L * 0.2); g.add(pole);
   const sock = new THREE.Mesh(new THREE.ConeGeometry(0.8, 3.8, 8, 1, true).rotateZ(-Math.PI / 2).translate(1.9, 0, 0), new THREE.MeshStandardMaterial({ color: 0xff6a1a, side: THREE.DoubleSide })); sock.position.set(-s * (W / 2 + 25), 7, -L * 0.2); sock.rotation.y = 0.7; g.add(sock); g.userData.sock = sock;
   // buildings
-  const hangar = (x, z, w = 26, l = 30, h = 9, roof = MATS.roofGrey) => { box(g, w, h, l, MATS.wall, x, 0, z); const r = new THREE.Mesh(prism(w + 1, 4, l + 1), roof); r.position.set(x, h, z); r.castShadow = true; g.add(r); };
+  // solid footprints in airport-local coordinates (same frame the meshes use: group at the airport, rotated by -heading)
+  const ry = g.rotation.y, solid = (x, z, w, l, h, kind = 'building') => col?.addLocalBox(a.x, a.z, ry, x, z, w, l, a.elev, a.elev + h, kind), pillar = (x, z, r, y0, y1, kind) => col?.addLocalCyl(a.x, a.z, ry, x, z, r, a.elev + y0, a.elev + y1, kind);
+  const hangar = (x, z, w = 26, l = 30, h = 9, roof = MATS.roofGrey) => { solid(x, z, w, l, h + 2); box(g, w, h, l, MATS.wall, x, 0, z); const r = new THREE.Mesh(prism(w + 1, 4, l + 1), roof); r.position.set(x, h, z); r.castShadow = true; g.add(r); };
   if (lay.tier === 2) {
     const tx = s * (lay.tx + 108);
+    solid(tx, 0, 28, 72, 10.8); solid(tx - s * 17, 0, 10, 24, 4); solid(tx, -105, 8, 8, 12); pillar(tx, -105, 2.8, 0, 36, 'tower'); pillar(tx, -105, 5.4, 36, 41.5, 'tower');
+    for (let i = 0; i < 3; i++) pillar(tx + s * 8, -160 - i * 15, 6, 0, 9, 'tank');
     box(g, 26, 10, 70, MATS.wall, tx, 0, 0); box(g, 26.4, 3.2, 70.4, MATS.glass, tx, 4, 0, false); box(g, 28, 0.8, 72, MATS.roofGrey, tx, 10, 0);
     box(g, 10, 4, 24, MATS.glass, tx - s * 17, 0, 0, false); // jet-bridge-ish canopy
     box(g, 8, 12, 8, MATS.tw, tx, 0, -105); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, 24, 10), MATS.tw); shaft.position.set(tx, 24, -105); shaft.castShadow = true; g.add(shaft);
     const cab = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 4, 4.5, 12), MATS.glass); cab.position.set(tx, 38.5, -105); g.add(cab); const cap = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 0.6, 12), MATS.white); cap.position.set(tx, 41.2, -105); g.add(cap);
     hangar(tx + s * 4, 170, 40, 36, 12); hangar(tx + s * 4, 215, 40, 36, 12, MATS.roofRed);
     for (let i = 0; i < 3; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 9, 14), MATS.tank); t.position.set(tx + s * 8, 4.5, -160 - i * 15); t.castShadow = true; g.add(t); }
-  } else if (lay.tier === 1) { hangar(s * (W / 2 + 90), 0, 22, 26, 8); box(g, 10, 4, 14, MATS.wall, s * (W / 2 + 90), 0, 36); }
+  } else if (lay.tier === 1) { hangar(s * (W / 2 + 90), 0, 22, 26, 8); solid(s * (W / 2 + 90), 36, 10, 14, 4); box(g, 10, 4, 14, MATS.wall, s * (W / 2 + 90), 0, 36); }
   else { hangar(s * (W / 2 + 28), L * 0.22, 14, 18, 5, MATS.roofRed); }
   scene.add(g); return g;
 }

@@ -67,3 +67,7 @@ Tested headlessly (v0.2): physics takeoff/landing, auto-flap schedule, full app 
 - **Autopilot (key 8):** altitude, heading and speed hold; W/S nudge altitude, A/D heading, Z/X speed.
 - **Settings** persist in localStorage; **keys can be rebound** (Menu > Keys).
 - Licensing: the FR24 models are GPLv2 (see `assets/CREDITS.md`). Read `HANDOFF.md` for the verify-first list and the remaining gaps.
+
+
+## v0.5 highlights
+Start screen with a Fly button, rewritten touch controls (left-handed layout, floating stick, context buttons), flight coach, solid buildings / hangars / tower / trees, per-part damage (engine, wings, tail, gear, airframe) with smoke and fire, tone mapping, moon, night lighting and a running clock. See HANDOFF.md ("v0.5 changes") for details and what still needs verification.

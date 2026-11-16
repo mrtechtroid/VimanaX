@@ -16,8 +16,11 @@ export class Aircraft {
     this.pos = new THREE.Vector3(); this.quat = new THREE.Quaternion(); this.vel = new THREE.Vector3(); this.angVel = new THREE.Vector3();
     this.controls = { pitch: 0, roll: 0, yaw: 0, throttle: 0, brake: 0, flapIndex: 0, flapAuto: true, gearDown: true, spoiler: 0, reverse: false, lights: false, rampOpen: false, autobrake: false };
     this.mass = def.flight.mass; this.eff = { pitch: 1, roll: 1, yaw: 1 }; this.rollBias = 0; this.liftScale = 1; this.jatoLeft = 0; this.rampPos = 0;
-    this.destroyed = false; this.gearDamaged = false; this.bay = []; this.flapPos = 0; this.flapTimer = 0; this.flapReason = ''; this.gearPos = 1; this.onGround = true; this.bump = 0; this.surface = null; this.telemetry = { airspeed: 0, aoa: 0, cl: 0 };
+    this.destroyed = false; this.gearDamaged = false;
+    // damage model (see DamageSystem): 1 = intact, 0 = gone. thrustScale / dragExtra / liftScale / rollBias / eff.* are derived from these.
+    this.dmg = { engine: 1, wingL: 1, wingR: 1, tail: 1, gear: 1, body: 1 }; this.thrustScale = 1; this.dragExtra = 0; this.kick = 0; this.airTime = 0; this.lostAileron = 0; this.bay = []; this.flapPos = 0; this.flapTimer = 0; this.flapReason = ''; this.gearPos = 1; this.onGround = true; this.bump = 0; this.surface = null; this.telemetry = { airspeed: 0, aoa: 0, cl: 0 };
     this.mesh = def.buildMesh(def.liveries[livery]);
+    this.bounds = new THREE.Box3().setFromObject(this.mesh); // body frame, measured before the mesh is moved: CollisionSystem derives its probes from it
   }
   place(x, y, z, heading) {
     this.pos.set(x, y, z); this.vel.set(0, 0, 0); this.angVel.set(0, 0, 0);

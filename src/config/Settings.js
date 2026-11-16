@@ -2,7 +2,11 @@ import { UNITS } from './units.js';
 /** Global user settings. Emits 'settings' {key,value} on change. Pass quiet=true to suppress the HUD toast (UI widgets do). */
 export class Settings {
   constructor() {
-    this.v = { units: 'aviation', controlSensitivity: 1, autoFlaps: true, cameraSensitivity: 1, fov: 60, camRecenter: true, pauseOnMenu: true, sound: true, volume: 0.8, autoDoors: true, cameraShake: 1, cockpitHud: false, bindings: {} };
+    this.v = { units: 'aviation', controlSensitivity: 1, autoFlaps: true, cameraSensitivity: 1, fov: 60, camRecenter: true, pauseOnMenu: true, sound: true, volume: 0.8, autoDoors: true, cameraShake: 1, cockpitHud: false, bindings: {},
+      // v0.5 interface: touch layout, feedback, onboarding
+      touchLeft: false, touchFloat: true, touchScale: 1, touchOpacity: 0.9, haptics: true, coach: true, introSeen: false, fullscreenOnStart: true, keepAwake: true,
+      // v0.5 world: clock speed (game seconds per real second; 0 = paused) and filmic tone mapping
+      timeScale: 0, toneMapping: true };
     this.load();
   }
   /** Persistence (localStorage, silently skipped when unavailable). Only known keys with matching types are restored. */

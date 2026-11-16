@@ -1,7 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="theme-color" content="#0a1b24">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#0a1b24">
+<meta name="description" content="VimanaX: a free flight simulator that runs in your browser, on desktop and phone.">
 <title>VimanaX</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
@@ -13,4 +15,39 @@
   }
 }
 </script>
-</head><body><canvas id="view"></canvas><div id="hud"></div><script type="module" src="src/main.js"></script></body></html>
+<script>
+// If the app cannot start (CDN blocked, no WebGL, a module error) say so on the start screen instead of leaving a black page.
+addEventListener('error', function (ev) {
+  if (window.__booted) return; var s = document.getElementById('splash'), m = document.getElementById('spFailMsg'); if (!s || !m) return;
+  var t = ev.target, why = t && t.tagName === 'SCRIPT' ? 'Could not load ' + (t.src || 'a script').split('/').slice(-2).join('/') : (ev.message || (ev.error && ev.error.message) || 'Unknown error');
+  s.classList.add('failed'); m.textContent = why;
+}, true);
+</script>
+</head><body><canvas id="view"></canvas><div id="hud">
+<div id="splash" role="dialog" aria-modal="true" aria-labelledby="spTitle">
+  <div class="sp-bg"></div>
+  <div class="sp-card">
+    <div class="sp-head">
+      <h1 id="spTitle" class="sp-mark">VimanaX</h1>
+      <p class="sp-sub">Free flight over a 24 km archipelago</p>
+    </div>
+    <div class="sp-main">
+      <ol class="sp-steps" id="spSteps" aria-label="Loading">
+        <li data-step="engine" data-state="active">Starting the engine</li>
+        <li data-step="world" data-state="todo">Building islands, rivers and runways</li>
+        <li data-step="sky" data-state="todo">Raising the sky and clouds</li>
+        <li data-step="aircraft" data-state="todo">Rolling out your aircraft</li>
+        <li data-step="ui" data-state="todo">Wiring up the controls</li>
+      </ol>
+      <div class="sp-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i id="spBar"></i></div>
+      <div id="spReady" hidden></div>
+      <div id="spFail" class="sp-fail">
+        <b>VimanaX could not start</b>
+        <p id="spFailMsg"></p>
+        <p>It needs WebGL and an internet connection to fetch three.js. Check that hardware acceleration is on, then reload.</p>
+        <button type="button" onclick="location.reload()">Reload</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div><script type="module" src="src/main.js"></script></body></html>
