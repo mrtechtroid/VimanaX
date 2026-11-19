@@ -11,7 +11,7 @@ const nac = (len, r) => [{ z: 0, rx: 0.02, ry: 0.02, cy: 0 }, { z: 0.01, rx: r *
 const spinner = [{ z: -0.95, rx: 0.01, ry: 0.01, cy: 0 }, { z: -0.8, rx: 0.17, ry: 0.17, cy: 0 }, { z: -0.45, rx: 0.34, ry: 0.34, cy: 0 }, { z: 0, rx: 0.4, ry: 0.4, cy: 0 }, { z: 0.001, rx: 0.01, ry: 0.01, cy: 0 }];
 const engine = (x, y) => ({ x, y, z: -4.9, pz: -4.95, R: 2.0, blades: 4, chord: 0.34, hub: 0.3, nacelle: nac(5.6, 0.62), spinner, spinnerColor: 0x2a2d30 });
 const win = (zm, am) => {
-  if (zm > -14.6 && zm < -12.7) return am > 30 && am < 150 ? 1 : 0;
+  if (zm > -14.6 && zm < -12.7) return am > 12 && am < 168 ? 1 : 0;
   if (zm >= -12.7 && zm < -11.0) return (am > 20 && am < 75) || (am > 105 && am < 160) ? 1 : 0;
   if (zm > -9.3 && zm < -8.4 && am > 150 && am < 200) return 1;
   return 0;

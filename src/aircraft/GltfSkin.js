@@ -32,6 +32,24 @@ export function rigModel(scene, spec) {
   for (const id of P.hide || []) for (const n of nodesOf(root, id)) n.visible = false;
   if (P.blurNode) { const n = findNode(root, P.blurNode); if (n) { n.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0; o.material.depthWrite = false; out.propBlur.push(o); } }); } }
   for (const l of spec.lights || []) { const m = new THREE.Mesh(new THREE.SphereGeometry(l.r || 0.07, 8, 6), new THREE.MeshBasicMaterial({ color: l.color ?? 0xffffff })); m.position.set(l.x, l.y, l.z); root.add(m); m.visible = false; out.strobes.push(m); }
+  // Doors: real door nodes become hinged panels driven by Aircraft.animate() (same record shape as AirframeBuilder's doors). `mirror: cx` clones the nodes across x = cx (the model only has one side).
+  if (spec.doors) {
+    out.doors = [];
+    for (const d of spec.doors) {
+      let objs = nodesOf(root, d.nodes); if (!objs.length) continue;
+      if (d.mirror != null) { const w = new THREE.Group(); root.updateMatrixWorld(true); for (const n of objs) { const c = n.clone(true); n.matrixWorld.clone().decompose(c.position, c.quaternion, c.scale); w.add(c); } w.scale.x = -1; w.position.x = 2 * d.mirror; root.add(w); w.updateMatrixWorld(true); objs = [w]; }
+      root.updateMatrixWorld(true); _b.makeEmpty(); objs.forEach(o => _b.expandByObject(o)); const pv = new THREE.Group();
+      pv.position.set(d.side < 0 ? _b.min.x : _b.max.x, (_b.min.y + _b.max.y) / 2, d.hingeRear ? _b.max.z : _b.min.z); root.add(pv); pv.updateMatrixWorld(true); objs.forEach(o => pv.attach(o));
+      out.doors.push({ id: d.id, label: d.label, pivot: pv, openAngle: d.open, at: d.at, in: d.in ?? null, enter: d.enter ?? null, pos: 0, target: 0, side: d.side });
+    }
+  }
+  // Glass: the glTF 1.0 -> 2.0 conversion kept `transparent` but lost the alpha, so every window rendered as an opaque grey slab (the pilot saw nothing but glass).
+  // Make it real glass, and register it so Aircraft.animate() can thin it further while the camera is inside (see `glassOpacity`).
+  out.glass = []; const skip = new Set([P.blurNode, ...(P.hide || [])].filter(Boolean)), glassRe = spec.glassRe || /transp|glass|vitre|window|windshield|canopy|verre/i;
+  root.traverse(o => { if (!o.isMesh || skip.has(o.name)) return; const ms = [].concat(o.material); ms.forEach((m, i) => { if (!m || !(glassRe.test(m.name || '') || glassRe.test(o.name))) return; if (/prop|blur|disc|lampe|light/i.test(o.name)) return;
+    if (!m.userData.isGlass) { m = m.clone(); m.userData.isGlass = true; m.color = new THREE.Color(spec.glassColor ?? 0x9fb8c8); m.transparent = true; m.opacity = spec.glassOpacity ?? 0.32; m.depthWrite = false; m.side = THREE.DoubleSide; m.roughness = 0.08; m.metalness = 0.1; m.envMapIntensity = 1.2; out.glass.push(m); }
+    if (Array.isArray(o.material)) o.material[i] = m; else o.material = m; o.renderOrder = 2; o.castShadow = false; }); });
+  out.shell = []; root.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && !m.transparent && !out.shell.includes(m) && !out.glass.includes(m)) out.shell.push(m); }); // hull skin: drawn double-sided while the camera is inside so the cabin has walls
   // finish: placement, scale, shadows, slightly glossier paint
   root.position.set(...(spec.pos || [0, 0, 0])); root.scale.setScalar(spec.scale || 1); root.rotation.y = spec.rotY || 0;
   root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; for (const m of [].concat(o.material)) if (m && !m.transparent && m.roughness !== undefined) { m.roughness = Math.min(m.roughness, 0.6); m.metalness = Math.max(m.metalness, 0.05); } } });

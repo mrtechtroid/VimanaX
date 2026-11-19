@@ -51,6 +51,11 @@ const def = {
   // FR24 PA-28 (GPL, see assets/CREDITS.md) replaces the procedural exterior once loaded; cockpit, doors and physics stay as is.
   model: {
     id: 'pa28', pos: [0.13, -0.97, 0.3],
+    // The model has one door (right side, node `porteG`); the pilot's door is a mirror copy across the fuselage centre line (x = -0.125 in model space).
+    doors: [
+      { id: 'doorR', label: 'Right door', nodes: ['porteG', 'vitreporteG'], side: 1, open: 1.35, at: { x: 1.6, z: -0.1 }, enter: 'copilot' },
+      { id: 'doorL', label: 'Pilot door', nodes: ['porteG', 'vitreporteG'], mirror: -0.125, side: -1, open: -1.35, at: { x: -1.6, z: -0.1 }, enter: 'pilot' },
+    ],
     parts: {
       aileronL: 'aileronG', aileronR: 'aileronD', flaps: [['voletG'], ['voletD']], elevators: [['ailes2']], elevatorHinge: 0.3, rudder: 'direction',
       gear: [['roueA', 'axeAB', 'axeAH', 'articuleAB', 'articuleAH'], ['roueG', 'axeGB', 'axeGH', 'articuleGB', 'articuleGH'], ['roueD', 'axeDB', 'axeDH', 'articuleDB', 'articuleDH']],

@@ -97,7 +97,7 @@ export class WalkSystem {
       if (this.localDist(ac, { x: 0, z: ac.mesh.userData.parts.rampAngles?.hingeZ - 1.5 }) < 2.2 && ac.def.cargo) out.push({ d: 2, text: ac.controls.rampOpen ? 'Close cargo ramp' : 'Open cargo ramp', run: () => e.bus.emit('action', 'ramp') });
       const v = e.cargo.nearVehicle(this.pos, 3.2, ac); if (v) out.push({ d: 1, text: `Drive ${v.name}`, run: () => this.enterVehicle(v) });
     } else {
-      for (const d of doors) { const dd = this.worldDist(ac, d.at); if (dd < 2) out.push({ d: dd, text: d.pos < 0.9 ? `Open ${d.label.toLowerCase()}` : d.enter ? `Climb in (${d.enter === 'pilot' ? 'pilot' : 'co-pilot'} seat)` : `Board ${ac.def.name.split(' (')[0]}`, run: () => this.useDoor(ac, d) }); }
+      for (const d of doors) { const dd = this.worldDist(ac, d.at); if (dd < 2 && !d.enter && !d.in) out.push({ d: dd, text: d.target ? `Close ${d.label.toLowerCase()}` : `Open ${d.label.toLowerCase()}`, run: () => { d.target = d.target ? 0 : 1; e.bus.emit('sfx', d.target ? 'door_open' : 'door_close'); } }); else if (dd < 2) out.push({ d: dd, text: d.pos < 0.9 ? `Open ${d.label.toLowerCase()}` : d.enter ? `Climb in (${d.enter === 'pilot' ? 'pilot' : 'co-pilot'} seat)` : `Board ${ac.def.name.split(' (')[0]}`, run: () => this.useDoor(ac, d) }); }
       const v = e.cargo.nearVehicle(this.pos, 3.4); if (v) out.push({ d: 1.5, text: `Drive ${v.name}`, run: () => this.enterVehicle(v) });
     }
     out.sort((a, b) => a.d - b.d); return out[0] || null;
@@ -127,8 +127,8 @@ export class WalkSystem {
     const e = this.e, w = e.world; let nx = this.pos.x + this.vel.x * dt, nz = this.pos.z + this.vel.z * dt;
     const inside = this.inside; let floor;
     if (inside) { // aircraft-local walk: bounds + deck height; stepping off the ramp end / onto the ramp switches in and out of the cabin
-      _b.set(nx, 0, nz).sub(inside.pos); _b.y = 0; _b.applyQuaternion(_iq.copy(inside.quat).invert()); const D = inside.def.interior, hz = inside.mesh.userData.parts.rampAngles.hingeZ, end = rampEnd(inside), open = inside.rampPos > 0.9, W = D.halfW - 0.3;
-      let lx = clamp(_b.x, -W, W), lz = clamp(_b.z, D.z0 + 0.3, open ? end + 1 : hz - 0.2); const dy = deckY(inside, lx, lz);
+      _b.set(nx, 0, nz).sub(inside.pos); _b.y = 0; _b.applyQuaternion(_iq.copy(inside.quat).invert()); const D = inside.def.interior, A = inside.mesh.userData.parts.rampAngles, hz = A?.hingeZ, end = A ? rampEnd(inside) : -Infinity, open = !!A && inside.rampPos > 0.9, W = D.halfW - 0.3;
+      let lx = clamp(_b.x, -W, W), lz = clamp(_b.z, D.z0 + 0.3, open ? end + 1 : (hz != null ? hz - 0.2 : D.z1 - 0.3)); const dy = A ? deckY(inside, lx, lz) : null;
       if (open && lz > end - 0.15) { this.inside = null; _a.set(lx, 0, lz).applyQuaternion(inside.quat).add(inside.pos); nx = _a.x; nz = _a.z; floor = w.groundHeight(nx, nz); }
       else { floor = inside.pos.y + (dy ?? D.floorY); _a.set(lx, 0, lz).applyQuaternion(inside.quat).add(inside.pos); nx = _a.x; nz = _a.z; }
     } else {
@@ -147,10 +147,10 @@ export class WalkSystem {
   }
   updateAvatar(dt) {
     const av = this.avatar; if (this.mode !== 'foot') { av.visible = false; return; }
-    av.visible = this.third; av.position.copy(this.pos); av.rotation.y = this.yaw;
+    av.visible = this.third && !this.inside; av.position.copy(this.pos); av.rotation.y = this.yaw;
     if (this.mixer) { const s = this.speed, w = { Idle: clamp(1 - s / 0.6, 0, 1), Walk: s > 0.1 && s < 3.4 ? clamp(Math.min(s / 0.6, (3.8 - s) / 1.2), 0, 1) : 0, Run: clamp((s - 3) / 1.4, 0, 1) }; for (const k in this.acts) this.acts[k].setEffectiveWeight(w[k]); this.acts.Walk?.setEffectiveTimeScale(clamp(s / 1.9, 0.5, 1.4)); this.mixer.update(dt); }
     else this.fb.userData.swing(this.t, this.speed);
   }
   /** Camera pose for on-foot views (CameraManager). */
-  eye(out) { return out.set(this.pos.x, this.pos.y + EYE, this.pos.z); }
+  eye(out) { const h = this.inside?.def.interior?.height; return out.set(this.pos.x, this.pos.y + (h ? Math.min(EYE, h - 0.2) : EYE), this.pos.z); } // low cabins (business jet) make you stoop instead of poking your head through the roof
 }

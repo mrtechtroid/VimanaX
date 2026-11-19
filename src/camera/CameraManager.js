@@ -129,12 +129,13 @@ export class CameraManager {
   finish(dt, fov) {
     const cam = this.e.camera; this.fov = damp(this.fov, fov, 8, dt);
     if (this.blend) { const b = this.blend; b.t = Math.min(1, b.t + dt / 0.7); const k = b.t * b.t * (3 - 2 * b.t); cam.position.lerpVectors(b.pos, cam.position, k); cam.quaternion.slerpQuaternions(b.quat, cam.quaternion, k); this.fov = THREE.MathUtils.lerp(b.fov, this.fov, k); if (b.t >= 1) this.blend = null; }
-    if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+    const near = this.inside || this.e.walk.mode === 'foot' || this.e.walk.mode === 'vehicle' ? 0.08 : 0.3; // cockpit instruments sit well inside the old 0.3 m near plane and were being clipped
+    if (Math.abs(cam.fov - this.fov) > 0.01 || cam.near !== near) { cam.fov = this.fov; cam.near = near; cam.updateProjectionMatrix(); }
   }
   /** First / third person view of the walking pilot. */
-  footCamera(dt) {
+  footCamera(dt) { // inside a hull the orbit camera would sit outside the walls, so cabins are always first-person
     const e = this.e, w = e.walk, cam = e.camera, eye = w.eye(_a);
-    if (!w.third) { cam.position.copy(eye); cam.quaternion.setFromEuler(_e.set(w.pitch, w.yaw, 0)); }
+    if (!w.third || w.inside) { cam.position.copy(eye); cam.quaternion.setFromEuler(_e.set(w.pitch, w.yaw, 0)); }
     else { _f.set(-Math.sin(w.yaw) * Math.cos(w.pitch), Math.sin(w.pitch), -Math.cos(w.yaw) * Math.cos(w.pitch)); _b.copy(w.pos).setY(w.pos.y + 1.5); cam.position.copy(_b).addScaledVector(_f, -this.footDist).add(_m2.set(0, 0.35, 0)); cam.position.y = Math.max(cam.position.y, e.world.groundHeight(cam.position.x, cam.position.z) + 0.4); cam.up.copy(UP); cam.lookAt(_b); }
     this.shake(dt, { bump: 0 }, 0);
   }

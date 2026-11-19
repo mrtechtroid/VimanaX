@@ -135,3 +135,19 @@ Tests: `tests/canvas-stub.mjs` gives jsdom a no-op 2D canvas (the `canvas` packa
 - Sky shader: sunrise / sunset glow, anti-twilight belt, moon, twinkling stars, dithering. Moonlight, aircraft **landing light** (Lights switch), lit town windows at night, redder low sun, gentler fog ramp, cloud forward-scatter glow.
 - **Filmic tone mapping** with exposure that rises at night (World > Picture; off = old look). Light intensities were tuned for no tone mapping, so exposure (`applyTone`) may need adjusting.
 - **Time flow** (World > Clock): paused / real time / 1 min = 1 h / 6 s = 1 h. `env.hour` can be fractional; use `env.fmtHour()`.
+
+## Update: in-person / cockpit / cabin pass (unfinished)
+
+Done (verified in headless Chromium screenshots unless noted):
+- Window glass in FR24 glTF models was opaque (alpha lost in conversion) -> now real glass, thinned to ~7% when the camera is inside (`GltfSkin.js`, `Aircraft.js`).
+- Cockpit panel is placed relative to the eye (`panel.drop`), with a lower dash filler; engine page shows the right engine count and hides cargo-only rows (`Cockpit.js`, `fr24.js`).
+- Camera near plane 0.3 -> 0.08 inside cockpits / on foot (`CameraManager.js`).
+- glTF hulls have no windscreen opening: a clipping box is cut ahead of the seated pilot (`Aircraft.windshieldCut`, `cockpit.view` in `fr24.js`).
+- Citation / ATR 42 / 737: recalibrated eyes from model geometry; added interiors (`interior`), passenger cabins (`cockpit.cabin`), real hinged door nodes (`model.doors`); Enter now stands you up. WalkSystem no longer assumes a cargo ramp. Walking eye height respects `interior.height`; cabins are always first-person.
+- Skylark: pilot door is a mirror clone of the model's single door (UNVERIFIED visually).
+- Hull is drawn double-sided and matte while the camera is inside (glossy paint mirrored the sky, so ceilings looked like open air). Last edit, only partly verified.
+
+Not done / to check next:
+- Look at ATR 42 and 737 cabins, door open/exit/board flow, Skylark mirrored door, co-pilot seat, Atlas after the edits, vehicle driving cameras.
+- `tests/fleet.mjs` "b738 survives the take-off run" already failed before this pass.
+- Headless screenshot tooling used: puppeteer-core + @sparticuz/chromium (SwiftShader); the harness blocks on slow frames, wait on `renderer.info.render.frame` rather than wall-clock. `tools/glb-nodes.mjs` dumps node bounds from Draco GLBs.
