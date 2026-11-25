@@ -22,7 +22,7 @@ import { MapUI } from './ui/MapUI.js';
 import { HUD } from './ui/HUD.js';
 import { Menu } from './ui/Menu.js';
 import { Autopilot } from './systems/Autopilot.js';
-import { Splash, bootStep, bootYield } from './ui/Splash.js';
+import { Splash, bootStep, bootProgress, bootYield } from './ui/Splash.js';
 import { Coach } from './ui/Coach.js';
 
 // Composition root: swap/add modules here. Update order = registration order.
@@ -35,7 +35,11 @@ engine
   .use('assets', new Assets())
   .use('env', new Environment({ hour: 9, windSpeed: 4, windFrom: 270 }));
 bootStep('world'); await bootYield();
-engine.use('world', new World(worldConfig)); // generates the heightfield (~1.3 s)
+// Generate the heightfield in batches (browser stays responsive and the splash shows real progress). Headless tests keep the synchronous path.
+const progressive = !/jsdom/i.test(navigator.userAgent);
+const world = new World(worldConfig, { progressive, yieldFn: async f => { bootProgress('world', f); await bootYield(); } });
+await world.ready;
+engine.use('world', world);
 bootStep('sky'); await bootYield();
 engine.use('clouds', new Clouds());
 bootStep('aircraft'); await bootYield();

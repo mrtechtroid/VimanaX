@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { UNITS } from '../config/units.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), wrap = a => Math.atan2(Math.sin(a), Math.cos(a)), _f = new THREE.Vector3(), _r = new THREE.Vector3();
 
 /**
@@ -24,16 +25,17 @@ export class Autopilot {
   }
   read(p) {
     _f.set(0, 0, -1).applyQuaternion(p.quat); _r.set(1, 0, 0).applyQuaternion(p.quat);
-    const V = p.vel.length(); return { hdg: Math.atan2(_f.x, -_f.z), pitch: Math.asin(clamp(_f.y, -1, 1)), bank: -Math.asin(clamp(_r.y, -1, 1)), gamma: V > 1 ? Math.asin(clamp(p.vel.y / V, -1, 1)) : 0, V };
+    const V = p.telemetry?.airspeed || p.vel.length(); // hold airspeed, not ground speed: a headwind must not stall the AP
+    return { hdg: Math.atan2(_f.x, -_f.z), pitch: Math.asin(clamp(_f.y, -1, 1)), bank: -Math.asin(clamp(_r.y, -1, 1)), gamma: V > 1 ? Math.asin(clamp(p.vel.y / V, -1, 1)) : 0, V };
   }
-  label(units) { return `AP ${Math.round(this.alt)} m \u00b7 ${Math.round((this.hdg * 180 / Math.PI + 360) % 360)}\u00b0 \u00b7 ${Math.round(this.spd * 1.944)} kt`; }
+  label(units = 'aviation') { const U = UNITS[units] || UNITS.aviation; return `AP ${Math.round(this.alt * U.alt[1])} ${U.alt[0]} \u00b7 ${Math.round((this.hdg * 180 / Math.PI + 360) % 360)}\u00b0 \u00b7 ${Math.round(this.spd * U.speed[1])} ${U.speed[0]}`; }
   /** Called by PlayerController after it copied the pilot's inputs into controls. */
   apply(p, s, dt) {
     if (!this.on) return;
     if (p.onGround || p.destroyed || this.e.walk.mode !== 'aircraft') return this.off();
     const f = p.def.flight, k = this.read(p), c = p.controls, prev = this.st; dt = Math.max(dt, 1e-3);
     // pilot inputs move the targets
-    if (Math.abs(s.pitch) > 0.08) this.alt -= s.pitch * (f.mass > 20000 ? 12 : 8) * dt * 2;
+    if (Math.abs(s.pitch) > 0.08) this.alt += s.pitch * (p.mass > 20000 ? 12 : 8) * dt * 2; // pulling back commands a climb
     if (Math.abs(s.roll) > 0.08) this.hdg = wrap(this.hdg + s.roll * 0.3 * dt);
     if (this.last != null && Math.abs(s.throttle - this.last) > 1e-4) this.spd = clamp(this.spd + (s.throttle - this.last) * 90, f.vRef * 0.75, f.vRef * 2.6);
     this.last = s.throttle;
@@ -41,7 +43,7 @@ export class Autopilot {
     // heading -> bank -> aileron
     const bankT = clamp(wrap(this.hdg - k.hdg) * 1.3, -0.4, 0.4); c.roll = clamp((bankT - k.bank) * 1.8 - rate.b * 0.7, -1, 1);
     // altitude -> climb angle -> elevator (positive = nose up)
-    const vmax = Math.min(f.mass > 20000 ? 9 : 6, k.V * 0.12), vsT = clamp((this.alt - p.pos.y) * 0.12, -vmax, vmax), gT = Math.asin(clamp(vsT / Math.max(k.V, 20), -0.3, 0.3));
+    const vmax = Math.min(p.mass > 20000 ? 9 : 6, k.V * 0.12), vsT = clamp((this.alt - p.pos.y) * 0.12, -vmax, vmax), gT = Math.asin(clamp(vsT / Math.max(k.V, 20), -0.3, 0.3));
     c.pitch = clamp((gT - k.gamma) * 5 - rate.p * 0.8, -0.5, 0.5);
     c.yaw = 0; // no coordinated rudder: yaw is left to the airframe's own stability
     // speed -> throttle (PI-ish)

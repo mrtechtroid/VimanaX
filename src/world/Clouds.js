@@ -4,11 +4,14 @@ const SPAN = 28000, HALF = SPAN / 2, TAU = Math.PI * 2;
 const VS = `attribute vec3 aOff; attribute float aScale; attribute float aShade; uniform vec3 uCam, uDrift; varying vec2 vUv; varying float vShade, vFade, vDist; varying vec3 vView;
 void main(){ vec3 p = aOff + uDrift; p.xz = mod(p.xz - uCam.xz + ${HALF.toFixed(1)}, ${SPAN.toFixed(1)}) - ${HALF.toFixed(1)} + uCam.xz;
   vView = normalize(p - uCam); vec4 mv = modelViewMatrix * vec4(p, 1.0); float d = length(mv.xyz); mv.xy += position.xy * aScale; gl_Position = projectionMatrix * mv; vUv = uv; vShade = aShade; vDist = d;
-  vFade = smoothstep(110.0, 420.0, d) * (1.0 - smoothstep(9000.0, 13500.0, d)); }`;
+  vFade = smoothstep(12.0, 130.0, d) * (1.0 - smoothstep(9000.0, 13500.0, d)); }`;
 const FS = `uniform sampler2D uMap; uniform vec3 uLit, uShadow, uFog, uSunDir; uniform float uOpacity; varying vec2 vUv; varying float vShade, vFade, vDist; varying vec3 vView;
 void main(){ float a = texture2D(uMap, vUv).a; vec3 c = mix(uShadow, uLit, vShade);
-  c += uLit * pow(max(dot(normalize(vView), uSunDir), 0.0), 5.0) * 0.45 * (0.4 + 0.6 * vShade);
-  /* silver lining: clouds glow when you look toward the sun through them */ c = mix(c, uFog, smoothstep(3000.0, 13000.0, vDist) * 0.7); gl_FragColor = vec4(c, a * uOpacity * vFade); if (gl_FragColor.a < 0.003) discard; }`;
+  float mu = max(dot(normalize(vView), uSunDir), 0.0);
+  c += uLit * (pow(mu, 5.0) * 0.3 + pow(mu, 40.0) * 0.55) * (0.3 + 0.7 * vShade); /* silver lining / forward scatter */
+  c = mix(c, uFog, smoothstep(3000.0, 13000.0, vDist) * 0.7);
+  float near = 0.4 + 0.6 * smoothstep(25.0, 220.0, vDist); /* close puffs stay soft instead of becoming a white wall */
+  gl_FragColor = vec4(c, a * uOpacity * vFade * near); if (gl_FragColor.a < 0.003) discard; }`;
 const rnd = (() => { let s = 1337; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
 const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 0.75;
 
@@ -27,7 +30,7 @@ const wrap = (v, c) => ((v - c + HALF) % SPAN + SPAN) % SPAN - HALF + c;
 
 /** Cumulus clusters (instanced soft billboards, wrapped around the camera, drifting with the wind) + stratus deck. Flying through cloud cuts visibility (env.visibility). */
 export class Clouds {
-  constructor() { this.clusters = []; this.puffs = []; this.drift = new THREE.Vector3(); this.sortT = 0; this.weather = null; this.inside = 0; }
+  constructor() { this.clusters = []; this.puffs = []; this.drift = new THREE.Vector3(); this.sortT = 0; this.weather = null; this.inside = 0; this._cmp = (a, b) => this.dist[b] - this.dist[a]; }
   init(e) {
     this.e = e; this.tex = puffTexture();
     this.mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: this.tex }, uLit: { value: new THREE.Color(1, 1, 1) }, uShadow: { value: new THREE.Color(.6, .65, .72) }, uFog: { value: new THREE.Color() }, uOpacity: { value: 0.9 }, uCam: { value: new THREE.Vector3() }, uDrift: { value: this.drift }, uSunDir: { value: e.env.sunDir } } });
@@ -44,7 +47,9 @@ export class Clouds {
     }
     this.relight(); this.upload(true); this.strat.visible = W.cover > 0.28 && weather !== 'fog'; this.strat.material.opacity = weather === 'overcast' ? 0.88 : 0.28; this.stratAlt = weather === 'overcast' ? 2100 : 2900; this.strat.position.y = this.stratAlt;
   }
-  relight() { const s = this.e.env.sunDir; for (const p of this.puffs) { const c = p.c, dx = p.x - c.x, dy = p.y - c.y + c.s * 0.1, dz = p.z - c.z, l = Math.hypot(dx, dy, dz) || 1; p.shade = THREE.MathUtils.clamp(0.42 + 0.35 * ((dx * s.x + dy * s.y + dz * s.z) / l) + 0.35 * p.h + 0.15 * s.y, 0.15, 1); } }
+  relight() { const s = this.e.env.sunDir; for (const p of this.puffs) { const c = p.c, dx = p.x - c.x, dy = p.y - c.y + c.s * 0.1, dz = p.z - c.z, l = Math.hypot(dx, dy, dz) || 1;
+    const shadow = Math.max(0, -p.h) * 0.16 * Math.max(0, s.y); // lower puffs sit in the shade of the cluster's upper puffs
+    p.shade = THREE.MathUtils.clamp(0.42 + 0.35 * ((dx * s.x + dy * s.y + dz * s.z) / l) + 0.35 * p.h + 0.15 * s.y - shadow, 0.12, 1); } }
   upload(rebuild = false) {
     const n = this.puffs.length; if (!n) return;
     if (rebuild || !this.mesh) {
@@ -58,13 +63,15 @@ export class Clouds {
     if (!this.order || this.order.length !== n) { this.order = new Uint32Array(n); this.dist = new Float32Array(n); }
     const dist = this.dist, order = this.order;
     for (let i = 0; i < n; i++) { const p = P[i], dx = wrap(p.x + this.drift.x, cam.x) - cam.x, dz = wrap(p.z + this.drift.z, cam.z) - cam.z, dy = p.y - cam.y; dist[i] = dx * dx + dy * dy + dz * dz; order[i] = i; }
-    order.sort((a, b) => dist[b] - dist[a]); // far to near, so near puffs blend last
+    order.sort(this._cmp); // far to near, so near puffs blend last
     for (let i = 0; i < n; i++) { const p = P[order[i]]; this.aOff.setXYZ(i, p.x, p.y, p.z); this.aSc.setX(i, p.sc); this.aSh.setX(i, p.shade); } this.aOff.needsUpdate = this.aSc.needsUpdate = this.aSh.needsUpdate = true;
   }
   update(dt, e) {
     const env = e.env; if (env.weather !== this.weather) this.build(env.weather);
     if (e.paused) return;
-    const cam = e.camera.position; this.drift.x += -Math.sin(env.wind.from * Math.PI / 180) * env.wind.speed * 0.6 * dt; this.drift.z += Math.cos(env.wind.from * Math.PI / 180) * env.wind.speed * 0.6 * dt;
+    const cam = e.camera.position, r = env.wind.from * Math.PI / 180;
+    this.drift.x = (this.drift.x - Math.sin(r) * env.wind.speed * 0.6 * dt) % SPAN;
+    this.drift.z = (this.drift.z + Math.cos(r) * env.wind.speed * 0.6 * dt) % SPAN; // wrapped: long sessions keep float precision in the shader uniform
     const u = this.mat.uniforms; u.uCam.value.copy(cam); const night = 1 - 0.92 * env.night; u.uLit.value.copy(env.sunColor).lerp(_white, 0.55).multiplyScalar(night * (0.55 + 0.5 * env.sunDir.y)); u.uShadow.value.copy(env.sky).lerp(_cool, 0.5).multiplyScalar(0.7 * night + 0.03); u.uFog.value.copy(env.sky); u.uOpacity.value = this.weather === 'overcast' ? 0.95 : 0.88;
     this.strat.position.x = cam.x; this.strat.position.z = cam.z; this.strat.material.color.copy(env.sky).lerp(_white, 0.6).multiplyScalar(Math.max(0.05, night * (0.5 + 0.5 * env.sunDir.y)));
     if ((this.sortT -= dt) <= 0) { this.sortT = 0.45; this.relightT = (this.relightT || 0) + 1; if (this.relightT % 8 === 0) this.relight(); this.upload(); }
@@ -72,6 +79,6 @@ export class Clouds {
     let dmax = 0; const p = e.camera.position;
     for (const c of this.clusters) { const dx = wrap(c.x + this.drift.x, p.x) - p.x, dz = wrap(c.z + this.drift.z, p.z) - p.z, dy = p.y - (c.y + c.s * 0.12); if (Math.abs(dy) > c.s * 0.34) continue; const d = Math.hypot(dx, dz); if (d < c.r) dmax = Math.max(dmax, (1 - d / c.r) * (1 - Math.abs(dy) / (c.s * 0.34))); }
     if (this.strat.visible && Math.abs(p.y - this.stratAlt) < 90) dmax = Math.max(dmax, this.strat.material.opacity * (1 - Math.abs(p.y - this.stratAlt) / 90));
-    this.inside += (Math.min(1, dmax * 2.2) - this.inside) * Math.min(1, dt * 1.5); env.visibility = 1 - 0.92 * this.inside; env.e.scene.fog.color.copy(env.sky).lerp(_fogTint.set(0.75, 0.78, 0.82).multiplyScalar(Math.max(0.1, night)), this.inside * 0.85);
+    this.inside += (Math.min(1, dmax * 2.2) - this.inside) * Math.min(1, dt * 1.5); env.visibility = 1 - 0.92 * this.inside; env.e.scene.fog.color.copy(env.fogColor || env.sky).lerp(_fogTint.set(0.75, 0.78, 0.82).multiplyScalar(Math.max(0.1, night)), this.inside * 0.85);
   }
 }

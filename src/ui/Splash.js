@@ -10,6 +10,12 @@ export function bootStep(id) {
   root.querySelectorAll('[data-step]').forEach(li => { const j = STEPS.indexOf(li.dataset.step); li.dataset.state = j < i ? 'done' : j === i ? 'active' : 'todo'; });
   const bar = $('spBar'); if (bar) bar.style.width = Math.round(6 + i / STEPS.length * 94) + '%';
 }
+/** Fine-grained progress while the terrain heightfield is generated (0..1 within the current step). */
+export function bootProgress(step, f) {
+  const bar = $('spBar'); if (!bar) return;
+  const i = STEPS.indexOf(step); if (i < 0) return;
+  bar.style.width = Math.round(6 + (i + f) / STEPS.length * 94) + '%';
+}
 export function bootDone() {
   const root = $('splash'); if (!root) return; root.querySelectorAll('[data-step]').forEach(li => { li.dataset.state = 'done'; });
   const bar = $('spBar'); if (bar) bar.style.width = '100%';

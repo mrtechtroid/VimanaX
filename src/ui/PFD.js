@@ -14,8 +14,9 @@ const D = 180 / Math.PI;
 export class PFD {
   constructor(canvas) { this.cv = canvas; this.g = canvas.getContext('2d'); this.k = 1; this.fit(); }
   fit() {
-    const r = this.cv.getBoundingClientRect?.() || { width: W }, dpr = Math.min(globalThis.devicePixelRatio || 1, 2), w = Math.max(160, Math.round((r.width || W) * dpr));
-    if (this.cv.width !== w) { this.cv.width = w; this.cv.height = Math.round(w * H / W); } this.k = this.cv.width / W;
+    const r = this.cv.getBoundingClientRect?.() || { width: W, height: H }, dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
+    const w = Math.max(160, Math.round((r.width || W) * dpr)), h = Math.max(100, Math.round((r.height || H) * dpr));
+    if (this.cv.width !== w || this.cv.height !== h) { this.cv.width = w; this.cv.height = h; } this.k = this.cv.width / W;
   }
   draw(s) {
     const g = this.g; g.setTransform(this.k, 0, 0, this.k, 0, 0); g.clearRect(0, 0, W, H);

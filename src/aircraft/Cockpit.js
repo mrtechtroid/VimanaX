@@ -67,10 +67,12 @@ export function buildCockpit(sp, l) {
   const light = new THREE.PointLight(0xffe9c8, 0, sp.bay ? 14 : (glass ? 6 : 4), 1.5); light.position.set(0, sp.bay ? 1.4 : eyeY + 0.55, sp.bay ? -10 : sp.eyes.pilot.z + 0.2); group.add(light); parts.light = light;
   group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 
-  let timer = 0, ctx = null, pfds = [], tex = [];
+  let timer = 0, ctx = null;
   const ensure = () => {
     if (ctx || typeof document === 'undefined') return; ctx = [];
-    for (const sc of parts.screens) { const cv = document.createElement('canvas'); cv.width = sc.w; cv.height = sc.h; const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; sc.mesh.material = new THREE.MeshBasicMaterial({ map: t, toneMapped: false }); sc.cv = cv; sc.g = cv.getContext('2d'); sc.t = t; if (sc.kind === 'pfd') sc.pfd = new PFD(cv); }
+    for (const sc of parts.screens) { const cv = document.createElement('canvas'); cv.width = sc.w; cv.height = sc.h; const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+      const old = sc.mesh.material; sc.mesh.material = new THREE.MeshBasicMaterial({ map: t, toneMapped: false }); old?.dispose?.(); // the placeholder material was only needed until the first draw
+      sc.cv = cv; sc.g = cv.getContext('2d'); sc.t = t; if (sc.kind === 'pfd') sc.pfd = new PFD(cv); }
   };
   return { group, parts, update(ac, e, dt, viewing) {
     const c = ac.controls; parts.yokes.forEach(y => { y.rotation.z = -c.roll * 0.9; y.position.z = y.userData.base.z + c.pitch * 0.07; });

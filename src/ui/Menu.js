@@ -39,7 +39,8 @@ export class Menu {
       if (ev.key !== 'Tab' || !this.isOpen) return; const f = [...el.querySelectorAll('button,input,[tabindex="0"]')].filter(x => x.offsetParent !== null); if (!f.length) return;
       const first = f[0], last = f[f.length - 1]; if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); } else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
     });
-    e.bus.on('action', a => { if (a === 'menu') this.toggle(); else if (a === 'help') { this.show('help'); this.toggle(true); } else this.refresh(); });
+    e.bus.on('action', a => { if (a === 'menu') this.toggle(); else if (a === 'help') { this.show('help'); this.toggle(true); }
+      else if (['gear', 'flapsDown', 'flapsUp', 'flapsAuto', 'spoiler', 'reverse', 'lights', 'autobrake', 'jato', 'ramp', 'cargo', 'nextAircraft', 'nextLivery', 'reset'].includes(a)) this.refresh(); });
     e.bus.on('settings', ({ key }) => { if (key === 'autoFlaps' || key === 'units') this.refresh(); }); e.bus.on('flaps:set', () => this.refresh());
     e.bus.on('settings', ({ key }) => { if (key === 'pauseOnMenu' && this.isOpen) e.paused = e.settings.get('pauseOnMenu'); });
   }
@@ -106,6 +107,7 @@ export class Menu {
       <h3>Wind</h3>${this.field('f-ws', 'Strength', 0, 25, 1, env.wind.speed, `${Math.round(env.wind.speed * sk)} ${sl}`)}${this.field('f-wd', 'Blowing from', 0, 345, 15, env.wind.from, `${String(env.wind.from).padStart(3, '0')}\u00b0`)}
       <h3>Turbulence</h3>${this.seg(Object.keys(TURB_LEVELS).map(k => [k, k[0].toUpperCase() + k.slice(1)]), env.turbulence, 'turb')}<p class="note">Auto follows the weather, wind, low-level terrain effects and daytime thermals over land.</p>
       <h3>Picture</h3>${this.sw('toneMapping', 'Cinematic tone mapping', 'Softer highlights and richer colour. Turn off if the picture looks too dark')}
+      ${this.sw('adaptiveRes', 'Adaptive resolution', 'Lowers internal render resolution automatically when frames run slowly, and restores it when there is headroom')}
       <h3>Units</h3>${this.seg(Object.keys(UNITS).map(u => [u, u[0].toUpperCase() + u.slice(1)]), this.e.settings.get('units'), 'unit')}`;
   }
   w_world() {

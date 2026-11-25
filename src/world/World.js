@@ -11,15 +11,16 @@ import { Colliders } from './Colliders.js';
  * Public API used by physics/systems: heightAt, groundHeight (incl. water surface), surfaceAt, isWater, spawnPoint, cfg, colliders.
  */
 export class World {
-  constructor(cfg) {
-    this.cfg = cfg; this.terrain = new Terrain(cfg); this.bounds = cfg.size / 2; this.colliders = new Colliders(); // solid statics (buildings, hangars, tower, tanks, trees)
+  constructor(cfg, opts = {}) {
+    this.cfg = cfg; this.terrain = new Terrain(cfg, opts); this.bounds = cfg.size / 2; this.colliders = new Colliders(); // solid statics (buildings, hangars, tower, tanks, trees)
+    this.ready = this.terrain.ready || Promise.resolve();
     for (const a of cfg.airports) a._lay = layoutAirport(a);
   }
   heightAt(x, z) { return this.terrain.heightAt(x, z); }
   isWater(x, z) { return this.terrain.isWater(x, z); }
   waterLevelAt(x, z) { return this.terrain.waterLevelAt(x, z); }
   /** Solid-or-water surface height: what the wheels / floats / camera collide with. */
-  groundHeight(x, z) { const h = this.terrain.heightAt(x, z), w = this.terrain.waterLevelAt(x, z); return h > w ? h : w; }
+  groundHeight(x, z) { const h = this.terrain.heightAt(x, z), w = this.terrain.waterLevelAt(x, z, h); return h > w ? h : w; }
   /** Surface under a world point: airport paved areas / shoulder first, else by terrain (water, sand, grass, dirt, rock, snow). */
   surfaceAt(x, z) {
     for (const a of this.cfg.airports) {
@@ -40,11 +41,19 @@ export class World {
   init(e) {
     this.e = e; this.renderer = new TerrainRenderer(this.terrain, e.scene, { colliders: this.colliders }); this.scenery = new Scenery(this.terrain, e.scene, this.colliders);
     this.airportGroups = this.cfg.airports.map(a => buildAirport(a, a._lay, e.scene, this.colliders));
-    const sp = this.spawnPoint(); this.renderer.update(sp.pos, true);
+    const sp = this.spawnPoint(); this.renderer.update(sp.pos, true, 2, 2); // prime only the neighbourhood; the rest streams in behind the player
   }
   update(dt, e) {
-    const cam = e.camera.position; this.renderer.update(cam); this.renderer.animate(dt);
-    for (const g of this.airportGroups) if (g.userData.sock) { const w = e.env?.windVector?.(); if (w) g.userData.sock.rotation.y = Math.atan2(-w.z, w.x) - g.rotation.y; }
+    const cam = e.camera.position;
+    const moving = e.walk?.mode === 'foot' ? e.walk : (e.cargo?.driven || e.aircraft?.player);
+    this.renderer.update(cam, false, 2, Infinity, moving?.vel || null); // autoload the area we are flying toward
+    this.renderer.animate(dt, e);
+    const w = e.env?.windVector?.(); // the returned vector is shared: sample once instead of once per airport
+    const dark = e.env?.dark ?? 0;
+    if (w) for (const g of this.airportGroups) {
+      if (g.userData.sock) g.userData.sock.rotation.y = Math.atan2(-w.z, w.x) - g.rotation.y;
+      if (g.userData.lightMat) g.userData.lightMat.color.setScalar(0.35 + 0.65 * dark); // runway and taxi lights brighten after dusk
+    }
   }
   /** RGBA raster of the whole map for the map UI. */
   mapRaster(res = 768) { return this.terrain.mapRaster(res); }

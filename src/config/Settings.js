@@ -6,7 +6,7 @@ export class Settings {
       // v0.5 interface: touch layout, feedback, onboarding
       touchLeft: false, touchFloat: true, touchScale: 1, touchOpacity: 0.9, haptics: true, coach: true, introSeen: false, fullscreenOnStart: true, keepAwake: true,
       // v0.5 world: clock speed (game seconds per real second; 0 = paused) and filmic tone mapping
-      timeScale: 0, toneMapping: true };
+      timeScale: 0, toneMapping: true, adaptiveRes: true };
     this.load();
   }
   /** Persistence (localStorage, silently skipped when unavailable). Only known keys with matching types are restored. */

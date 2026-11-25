@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { disposeTree } from '../aircraft/Aircraft.js';
 const R = () => Math.random() - 0.5;
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _vv = new THREE.Vector3();
 
 export const ZONES = ['engine', 'wingL', 'wingR', 'tail', 'gear', 'body'];
 /** How an impact on one part is shared between zones (fraction of the severity each zone absorbs). */
@@ -13,7 +13,8 @@ const SPREAD = {
   body: { body: 1, engine: 0.2, wingL: 0.1, wingR: 0.1 },
 };
 /** How unforgiving each kind of obstacle is (multiplies severity). Trees give way, towers do not. */
-const KIND = { ground: 1, terrain: 1.15, water: 0.7, building: 1.5, tower: 1.7, tank: 1.3, tree: 0.45 };
+const KIND = { ground: 1, terrain: 1.15, water: 0.7, building: 1.5, tower: 1.7, tank: 1.3, tree: 0.45,
+  aircraft: 1.4, vehicle: 1.25, crate: 0.5, walker: 0.3, windsock: 0.5, papi: 0.7, dock: 1.1, buoy: 0.6 };
 /** Announcements by zone and level: 0 damaged (< 70 %), 1 badly damaged (< 30 %), 2 gone. */
 const MSG = {
   engine: ['Engine damaged', 'Engine badly damaged', 'Engine failure!'],
@@ -104,7 +105,7 @@ export class DamageSystem {
       ac._smk = (ac._smk || 0) + (burn ? 28 : 10) * dt;
       while (ac._smk >= 1) {
         ac._smk -= 1; _v.set(R() * 0.4, 0.1, ac.bounds.min.z * 0.7).applyQuaternion(ac.quat).add(ac.pos);
-        fx.emit(burn ? 'ash' : 'smoke', _v, ac.vel.clone().multiplyScalar(0.85)); if (burn && Math.random() < 0.6) fx.emit('fire', _v, ac.vel.clone().multiplyScalar(0.9));
+        _vv.copy(ac.vel).multiplyScalar(0.85); fx.emit(burn ? 'ash' : 'smoke', _v, _vv); if (burn && Math.random() < 0.6) fx.emit('fire', _v, _vv.multiplyScalar(1.06));
       }
     }
     for (let i = this.wrecks.length - 1; i >= 0; i--) { // the wreck keeps burning for 40 s, fading out

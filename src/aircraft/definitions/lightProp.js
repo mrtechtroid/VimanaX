@@ -3,7 +3,7 @@ import { buildAirframe } from '../AirframeBuilder.js';
 import { buildCockpit } from '../Cockpit.js';
 import { withDefaults } from '../../physics/defaults.js';
 
-const flight = withDefaults({ mass: 1100, wingArea: 16.5, maxThrust: 3000, gearHeight: 1.0 });
+const flight = withDefaults({ mass: 1100, wingArea: 16.5, maxThrust: 3000, gearHeight: 1.0, groundSpan: 11, propTorque: 0.35, pFactor: 0.22 });
 const win = (zm, am) => {
   const side = (am > 22 && am < 68) || (am > 112 && am < 158);
   if (zm > -1.55 && zm < -0.62) return am > 32 && am < 148 ? 1 : 0; // windscreen

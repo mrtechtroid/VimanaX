@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { skinAircraft } from './GltfSkin.js';
 import { Aircraft } from './Aircraft.js';
 
@@ -26,6 +27,11 @@ export class AircraftManager {
   }
   update(dt, e) {
     const n = Math.ceil(dt * 120), h = dt / n;
-    for (const a of this.list) { for (let i = 0; i < n; i++) this.model.step(a, h, e.env, e.world); a.animate(dt, e.time, e, a === this.player && e.cameras?.inside); }
+    for (const a of this.list) {
+      // Wind/turbulence costs ~40 trig calls a sample: once per frame is plenty, and keeping per-aircraft copies avoids sharing env.rot with AI traffic.
+      if (e.env.windAt) { const w = e.env.windAt(a.pos, a, dt); (a.wind ??= new THREE.Vector3()).copy(w); (a.windRot ??= new THREE.Vector3()).copy(e.env.rot); }
+      for (let i = 0; i < n; i++) this.model.step(a, h, e.env, e.world);
+      a.animate(dt, e.time, e, a === this.player && e.cameras?.inside);
+    }
   }
 }

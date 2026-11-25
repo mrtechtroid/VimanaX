@@ -11,6 +11,7 @@ const KINDS = {
   spray: { color: 0xdff2fb, add: false, s0: 1.2, s1: 5, life: 1.4, op: 0.6, g: -2, up: 0 },
 };
 const POOL = 110;
+const _v = new THREE.Vector3();
 
 /** Pooled sprite particles. engine.fx.emit(kind, pos, vel) for one, engine.fx.burst(kind, pos, n, speed, vel) for a puff. Oldest particle is recycled when the pool is full. */
 export class Effects {
@@ -32,11 +33,14 @@ export class Effects {
   emit(kind, pos, vel = null) {
     const k = KINDS[kind]; if (!k) return; const p = this.free.pop() || this.live.shift(); if (!p) return;
     p.k = k; p.t = 0; p.sp.position.copy(pos); p.v.set(0, 0, 0); if (vel) p.v.copy(vel);
-    p.mat.color.setHex(k.color); p.mat.blending = k.add ? THREE.AdditiveBlending : THREE.NormalBlending; p.mat.opacity = k.op; p.mat.needsUpdate = true; p.sp.scale.setScalar(k.s0); p.sp.visible = true; this.live.push(p);
+    p.mat.color.setHex(k.color);
+    const blend = k.add ? THREE.AdditiveBlending : THREE.NormalBlending;
+    if (p.mat.blending !== blend) { p.mat.blending = blend; p.mat.needsUpdate = true; } // blending changes need a shader variant; colour/opacity do not
+    p.mat.opacity = k.op; p.sp.scale.setScalar(k.s0); p.sp.visible = true; this.live.push(p);
   }
   burst(kind, pos, n, speed = 4, vel = null) {
-    const v = new THREE.Vector3(), k = KINDS[kind]; if (!k) return;
-    for (let i = 0; i < n; i++) { v.set((Math.random() - 0.5) * speed, Math.random() * speed * 0.7, (Math.random() - 0.5) * speed); if (vel) v.add(vel); this.emit(kind, pos, v); }
+    const k = KINDS[kind]; if (!k) return;
+    for (let i = 0; i < n; i++) { _v.set((Math.random() - 0.5) * speed, Math.random() * speed * 0.7, (Math.random() - 0.5) * speed); if (vel) _v.add(vel); this.emit(kind, pos, _v); }
   }
   clear() { for (const p of this.live) { p.sp.visible = false; this.free.push(p); } this.live.length = 0; }
   update(dt) {

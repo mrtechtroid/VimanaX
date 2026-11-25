@@ -23,7 +23,8 @@ export class KeyboardInput {
       const menu = B.contains('menu-open'); // the menu keeps native Tab / Space / arrow behaviour; only Esc closes it from here
       if (!menu && ['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'Backspace'].includes(e.code)) e.preventDefault();
       if (menu && e.code !== 'Escape') return;
-      if (e.repeat) return; this.k.add(e.code); if (this.map[e.code]) bus.emit('action', this.map[e.code]);
+      this.k.add(e.code); // add before the repeat guard: a blur may have cleared held keys while the key is still down
+      if (e.repeat) return; if (this.map[e.code]) bus.emit('action', this.map[e.code]);
     });
     addEventListener('keyup', e => this.k.delete(e.code)); addEventListener('blur', () => this.k.clear());
   }

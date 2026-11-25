@@ -9,6 +9,7 @@
  */
 const CELL = 32, OFF = 4096, STRIDE = 8192;
 const cellKey = (ix, iz) => (ix + OFF) * STRIDE + (iz + OFF);
+const _probeHit = { nx: 0, ny: 0, nz: 0, pen: 0, item: null };
 
 export class Colliders {
   constructor() { this.cells = new Map(); this.count = 0; }
@@ -70,5 +71,38 @@ export class Colliders {
       out.nx = best[1][0]; out.ny = best[1][1]; out.nz = best[1][2]; out.pen = best[0]; out.item = it; return true;
     }
     return false;
+  }
+
+  /** Point test with a radius: centre first, then a 4-point ring. Returns the deepest contact; `out` keeps the same shape as test(). */
+  testRadius(x, y, z, r, vx, vy, vz, out) {
+    let hit = this.test(x, y, z, vx, vy, vz, out);
+    if (r < 0.01) return hit;
+    let best = hit ? out.pen : -Infinity;
+    const ring = [r, 0, -r, 0, 0, 0, 0, 0];
+    for (let i = 0; i < 4; i++) {
+      const dx = ring[i * 2], dz = ring[i * 2 + 1];
+      if (!this.test(x + dx, y, z + dz, vx, vy, vz, _probeHit)) continue;
+      if (_probeHit.pen > best) { best = _probeHit.pen; out.nx = _probeHit.nx; out.ny = _probeHit.ny; out.nz = _probeHit.nz; out.pen = _probeHit.pen; out.item = _probeHit.item; }
+      hit = true;
+    }
+    return hit;
+  }
+
+  /** Swept, radius-aware segment test against statics. Samples at least every 0.5 m, at most 32 samples. */
+  sweep(x0, y0, z0, x1, y1, z1, r, vx, vy, vz, out) {
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, len = Math.hypot(dx, dy, dz);
+    const n = Math.min(32, Math.max(1, Math.ceil(len / Math.max(0.5, r))));
+    for (let i = 1; i <= n; i++) { const t = i / n; if (this.testRadius(x0 + dx * t, y0 + dy * t, z0 + dz * t, r, vx, vy, vz, out)) return true; }
+    return false;
+  }
+
+  /** Collect all statics whose footprint/height overlaps the box (deduped across hash cells). */
+  queryAABB(x0, x1, z0, z1, y0, y1, out = []) {
+    out.length = 0; const seen = new Set();
+    for (let iz = Math.floor(z0 / CELL); iz <= Math.floor(z1 / CELL); iz++) for (let ix = Math.floor(x0 / CELL); ix <= Math.floor(x1 / CELL); ix++) {
+      const a = this.cells.get(cellKey(ix, iz)); if (!a) continue;
+      for (const it of a) { if (seen.has(it) || it.dead || it.y1 < y0 || it.y0 > y1) continue; seen.add(it); out.push(it); }
+    }
+    return out;
   }
 }

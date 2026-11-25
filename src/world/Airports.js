@@ -31,7 +31,7 @@ export function layoutAirport(a) {
 export function pavedAt(lay, lx, lz, margin = 0) { for (const r of lay.paved) if (lx >= r.x0 - margin && lx <= r.x1 + margin && lz >= r.z0 - margin && lz <= r.z1 + margin) return r.kind; return null; }
 
 export function buildAirport(a, lay, scene, col = null) {
-  if (a.water) return buildWaterBase(a, scene);
+  if (a.water) return buildWaterBase(a, scene, col);
   const g = new THREE.Group(), L = a.length, W = a.width, kind = lay.kind, s = lay.side; g.position.set(a.x, a.elev + 0.06, a.z); g.rotation.y = -a.heading * Math.PI / 180;
   for (const r of lay.paved) pave(g, r, r.kind === 'asphalt' ? MATS.asphalt : r.kind === 'taxi' ? MATS.taxi : r.kind === 'apron' ? MATS.apron : MATS[r.kind] || MATS.asphalt, r.kind === 'apron' ? 0.01 : r.kind === 'taxi' ? 0.005 : 0.02);
   const lights = [];
@@ -40,23 +40,25 @@ export function buildAirport(a, lay, scene, col = null) {
     for (let z = -L / 2 + 70; z < L / 2 - 50; z += 50) box(g, 0.9, 0.04, 28, MATS.white, 0, 0.03, z, false);
     for (const e of [-1, 1]) {
       const z0 = e * (L / 2 - 8); for (let i = 0; i < 8; i++) box(g, 1.5, 0.04, 28, MATS.white, (i - 3.5) * (W - 3) / 8, 0.03, z0 - e * 14, false);
-      for (const d of L > 700 ? [150, 300, 450] : [150, 300]) for (const sd of [-1, 1]) for (let k = 0; k < (d === 150 ? 3 : d === 300 ? 2 : 1); k++) box(g, 1.2, 0.04, 22, MATS.white, sd * (W * 0.22 + k * 2.1), 0.03, e * (L / 2 - 8 - d), false);
-      for (const sd of [-1, 1]) box(g, 3.2, 0.04, 40, MATS.white, sd * W * 0.3, 0.03, e * (L / 2 - 8 - 380), false);
+      for (const d of L > 700 ? [150, 300, 450] : [150, 300]) { const tz = L / 2 - 8 - d; if (tz > 10) for (const sd of [-1, 1]) for (let k = 0; k < (d === 150 ? 3 : d === 300 ? 2 : 1); k++) box(g, 1.2, 0.04, 22, MATS.white, sd * (W * 0.22 + k * 2.1), 0.03, e * tz, false); }
+      if (L / 2 - 388 > 10) for (const sd of [-1, 1]) box(g, 3.2, 0.04, 40, MATS.white, sd * W * 0.3, 0.03, e * (L / 2 - 8 - 380), false);
       // approach lights + threshold lights
       for (let i = 1; i <= 12; i++) lights.push([0, e * (L / 2 + i * 30), 0xfff4d0, 1]); for (let k = -4; k <= 4; k++) lights.push([k * 3, e * (L / 2 + 1), e > 0 ? 0xff3030 : 0x30ff60, 1]);
-      // PAPI: 4 lamp boxes left of the runway ~300 m in
-      for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(PAPI_GEO, i < 2 ? PAPI_RED : PAPI_WHITE); m.position.set(-(W / 2 + 10 + i * 4), 0.6, e * (L / 2 - 300)); g.add(m); }
+      // PAPI: 4 lamp boxes left of the runway, about 300 m in - clamped so short strips do not put them behind the threshold
+      const pz = e * Math.max(L / 2 * 0.55, L / 2 - 300);
+      for (let i = 0; i < 4; i++) { const lx = -(W / 2 + 10 + i * 4); const m = new THREE.Mesh(PAPI_GEO, i < 2 ? PAPI_RED : PAPI_WHITE); m.position.set(lx, 0.6, pz); g.add(m); col?.addLocalBox(a.x, a.z, g.rotation.y, lx, pz, 1.6, 1.6, a.elev, a.elev + 1.2, 'papi'); }
     }
     if (lay.tier === 2) for (const z of [-L / 2 + 70, L / 2 - 70]) for (let i = 0; i <= 10; i++) lights.push([s * (lay.tx - 7.5 + i * 1.5), z, 0x3070ff, 0.6]);
   }
   for (const sd of [-1, 1]) for (let z = -L / 2 + 10; z <= L / 2; z += 60) lights.push([sd * (W / 2 + 1), z, kind === 'asphalt' ? 0xfff2c0 : 0xffe9a0, 1]);
-  if (lights.length) { const im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0xffffff }), lights.length), mm = new THREE.Matrix4(), cc = new THREE.Color(); lights.forEach(([x, z, c], i) => { mm.makeTranslation(x, 0.3, z); im.setMatrixAt(i, mm); im.setColorAt(i, cc.set(c)); }); g.add(im); }
+  if (lights.length) { const im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), lights.length), mm = new THREE.Matrix4(), cc = new THREE.Color(); lights.forEach(([x, z, c], i) => { mm.makeTranslation(x, 0.3, z); im.setMatrixAt(i, mm); im.setColorAt(i, cc.set(c)); }); g.add(im); g.userData.lightMat = im.material; } // dimmed by day, full brightness at night (World.update)
   // windsock
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 7, 6), MATS.white); pole.position.set(-s * (W / 2 + 25), 3.5, -L * 0.2); g.add(pole);
   const sock = new THREE.Mesh(new THREE.ConeGeometry(0.8, 3.8, 8, 1, true).rotateZ(-Math.PI / 2).translate(1.9, 0, 0), new THREE.MeshStandardMaterial({ color: 0xff6a1a, side: THREE.DoubleSide })); sock.position.set(-s * (W / 2 + 25), 7, -L * 0.2); sock.rotation.y = 0.7; g.add(sock); g.userData.sock = sock;
   // buildings
   // solid footprints in airport-local coordinates (same frame the meshes use: group at the airport, rotated by -heading)
   const ry = g.rotation.y, solid = (x, z, w, l, h, kind = 'building') => col?.addLocalBox(a.x, a.z, ry, x, z, w, l, a.elev, a.elev + h, kind), pillar = (x, z, r, y0, y1, kind) => col?.addLocalCyl(a.x, a.z, ry, x, z, r, a.elev + y0, a.elev + y1, kind);
+  pillar(-s * (W / 2 + 25), -L * 0.2, 0.45, 0, 7, 'windsock'); // the mast is solid, not just scenery
   const hangar = (x, z, w = 26, l = 30, h = 9, roof = MATS.roofGrey) => { solid(x, z, w, l, h + 2); box(g, w, h, l, MATS.wall, x, 0, z); const r = new THREE.Mesh(prism(w + 1, 4, l + 1), roof); r.position.set(x, h, z); r.castShadow = true; g.add(r); };
   if (lay.tier === 2) {
     const tx = s * (lay.tx + 108);
@@ -74,12 +76,15 @@ export function buildAirport(a, lay, scene, col = null) {
 }
 
 /** Water aerodrome: buoys marking the landing lane, a floating dock and a windsock. */
-function buildWaterBase(a, scene) {
+function buildWaterBase(a, scene, col = null) {
   const g = new THREE.Group(); g.position.set(a.x, 0, a.z); g.rotation.y = -a.heading * Math.PI / 180; const L = a.length, W = a.width;
   const red = new THREE.MeshStandardMaterial({ color: 0xd8321e, roughness: 0.6 }), wht = new THREE.MeshStandardMaterial({ color: 0xf0f0ea, roughness: 0.6 });
-  for (const sd of [-1, 1]) for (let z = -L / 2; z <= L / 2; z += 125) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 1.6, 8), sd < 0 ? red : wht); b.position.set(sd * W / 2, 0.2, z); g.add(b); const t = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), new THREE.MeshBasicMaterial({ color: sd < 0 ? 0xff4030 : 0xffffff })); t.position.set(sd * W / 2, 1.2, z); g.add(t); }
+  for (const sd of [-1, 1]) for (let z = -L / 2; z <= L / 2; z += 125) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 1.6, 8), sd < 0 ? red : wht); b.position.set(sd * W / 2, 0.2, z); g.add(b); const t = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), new THREE.MeshBasicMaterial({ color: sd < 0 ? 0xff4030 : 0xffffff })); t.position.set(sd * W / 2, 1.2, z); g.add(t);
+    col?.addLocalCyl(a.x, a.z, g.rotation.y, sd * W / 2, z, 0.6, -0.8, 1.4, 'buoy'); }
   const dock = new THREE.Mesh(new THREE.BoxGeometry(22, 0.7, 5), new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 1 })); dock.position.set(W / 2 + 24, 0.1, 0); dock.receiveShadow = true; g.add(dock);
+  col?.addLocalBox(a.x, a.z, g.rotation.y, W / 2 + 24, 0, 22, 5, -0.3, 0.6, 'dock');
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 7, 6), wht); pole.position.set(W / 2 + 33, 3.8, 0); g.add(pole);
+  col?.addLocalCyl(a.x, a.z, g.rotation.y, W / 2 + 33, 0, 0.45, 0, 7.4, 'windsock');
   const sock = new THREE.Mesh(new THREE.ConeGeometry(0.8, 3.8, 8, 1, true).rotateZ(-Math.PI / 2).translate(1.9, 0, 0), new THREE.MeshStandardMaterial({ color: 0xff6a1a, side: THREE.DoubleSide })); sock.position.set(W / 2 + 33, 7.4, 0); g.add(sock); g.userData.sock = sock;
   scene.add(g); return g;
 }

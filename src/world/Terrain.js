@@ -8,10 +8,27 @@ const D2R = Math.PI / 180;
  * Pipeline: warped island masks -> ridged mountains + hills -> lakes -> downhill rivers (carved) -> airport plateaus.
  */
 export class Terrain {
-  constructor(cfg) {
+  constructor(cfg, opts = {}) {
     this.cfg = cfg; this.size = cfg.size; this.half = cfg.size / 2; this.N = cfg.grid || 1024; this.S = this.N + 1; this.cell = this.size / this.N;
     this.noise = makeNoise(cfg.seed ?? 1); this.H = new Float32Array(this.S * this.S); this.wet = new Uint8Array(this.S * this.S);
-    this.lakes = []; this.rivers = []; this.towns = []; this.build();
+    this.lakes = []; this.rivers = []; this.towns = [];
+    if (opts.progressive) this.ready = this.buildProgressive(opts.yieldFn);
+    else this.build();
+  }
+
+  /** Same pipeline as build(), but yields between row batches so the browser can paint the loading screen. */
+  async buildProgressive(yieldFn = null) {
+    const { S, cell, half, H } = this, rows = 64;
+    for (let j0 = 0; j0 < S; j0 += rows) {
+      const j1 = Math.min(S, j0 + rows);
+      for (let j = j0; j < j1; j++) for (let i = 0; i < S; i++) H[j * S + i] = this.raw(-half + i * cell, -half + j * cell);
+      if (yieldFn) await yieldFn(j1 / S);
+    }
+    this.snapAirportElev(); if (yieldFn) await yieldFn(0.88);
+    this.carveLakes(); if (yieldFn) await yieldFn(0.92);
+    this.carveRivers(); if (yieldFn) await yieldFn(0.97);
+    this.flattenAirports(); this.placeTowns(); if (yieldFn) await yieldFn(1);
+    return this;
   }
 
   /** Continuous base height before lakes/rivers/airports. */
@@ -55,7 +72,7 @@ export class Terrain {
   heightAt(x, z) { const v = this.bilinear(this.H, x, z); return v === null ? -70 : v; }
   slopeAt(x, z) { const d = this.cell; const gx = (this.heightAt(x + d, z) - this.heightAt(x - d, z)) / (2 * d), gz = (this.heightAt(x, z + d) - this.heightAt(x, z - d)) / (2 * d); return Math.hypot(gx, gz); }
   /** Water surface height at a point: lake level inside lakes, else sea level 0. */
-  waterLevelAt(x, z) { for (const l of this.lakes) if (Math.hypot(x - l.x, z - l.z) < l.r * 1.3 && this.heightAt(x, z) < l.level) return l.level; return 0; }
+  waterLevelAt(x, z, h = this.heightAt(x, z)) { for (const l of this.lakes) if (Math.hypot(x - l.x, z - l.z) < l.r * 1.3 && h < l.level) return l.level; return 0; }
   isWater(x, z) { return this.heightAt(x, z) < this.waterLevelAt(x, z) - 0.02; }
   nearRiver(x, z) { return (this.bilinear(this.wet, x, z) || 0) > 100; }
 

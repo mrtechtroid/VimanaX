@@ -8,7 +8,9 @@ import * as THREE from 'three';
  * Everything stays optional: if the model is missing the procedural airframe keeps flying.
  */
 const _b = new THREE.Box3(), _c = new THREE.Vector3();
-const findNode = (root, names) => { for (const n of [].concat(names || [])) { let f = null; root.traverse(o => { if (!f && o.name === n) f = o; }); if (f) return f; } return null; };
+// Name -> node lookup is built once per model rig instead of traversing the whole 737 for every requested part.
+let _nodes = new Map();
+const findNode = (root, names) => { for (const n of [].concat(names || [])) { const f = _nodes.get(n); if (f) return f; } return null; };
 
 /** Wrap `objs` in a pivot Group at a hinge point of their combined box. how: 'front' | 'center' | 'top' | fraction of chord from the front. */
 function pivot(root, objs, how = 'front') {
@@ -21,6 +23,7 @@ const nodesOf = (root, entry) => [].concat(entry || []).map(n => findNode(root, 
 
 export function rigModel(scene, spec) {
   const root = new THREE.Group(), P = spec.parts || {}; root.add(scene); root.updateMatrixWorld(true);
+  _nodes = new Map(); scene.traverse(o => { if (o.name && !_nodes.has(o.name)) _nodes.set(o.name, o); });
   const out = { aileronL: pivot(root, nodesOf(root, P.aileronL)), aileronR: pivot(root, nodesOf(root, P.aileronR)), rudder: pivot(root, nodesOf(root, P.rudder), 'front'), flaps: [], elevators: [], gear: [], props: [], propBlur: [], strobes: [] };
   for (const f of P.flaps || []) out.flaps.push(pivot(root, nodesOf(root, f)));
   for (const e of P.elevators || []) out.elevators.push(pivot(root, nodesOf(root, e), P.elevatorHinge ?? 'front'));
@@ -52,7 +55,9 @@ export function rigModel(scene, spec) {
   out.shell = []; root.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && !m.transparent && !out.shell.includes(m) && !out.glass.includes(m)) out.shell.push(m); }); // hull skin: drawn double-sided while the camera is inside so the cabin has walls
   // finish: placement, scale, shadows, slightly glossier paint
   root.position.set(...(spec.pos || [0, 0, 0])); root.scale.setScalar(spec.scale || 1); root.rotation.y = spec.rotY || 0;
-  root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; for (const m of [].concat(o.material)) if (m && !m.transparent && m.roughness !== undefined) { m.roughness = Math.min(m.roughness, 0.6); m.metalness = Math.max(m.metalness, 0.05); } } });
+  root.traverse(o => { if (!o.isMesh) return; const glassy = [].concat(o.material).some(m => m?.transparent || m?.userData?.isGlass);
+    o.castShadow = !glassy; o.receiveShadow = true; // glazing must not cast an opaque shadow (the pass above deliberately disabled it)
+    for (const m of [].concat(o.material)) if (m && !m.transparent && m.roughness !== undefined) { m.roughness = Math.min(m.roughness, 0.6); m.metalness = Math.max(m.metalness, 0.05); } });
   return { root, parts: out };
 }
 
@@ -67,5 +72,9 @@ export function skinAircraft(ac, e) {
     m.add(root); Object.assign(m.userData.parts, parts); ac._skinned = true; ac.skin = root; e.bus.emit('aircraft:skinned', ac); return true;
   };
   if (apply()) return;
-  e.assets.load(spec.id); const off = e.bus.on?.('assets:loaded', id => { if (id === spec.id && apply()) off?.(); });
+  e.assets.load(spec.id);
+  let offL, offF;
+  const done = () => { offL?.(); offF?.(); }; // always unsubscribe: a failed (or superseded) load must not leak a listener on every respawn
+  offL = e.bus.on?.('assets:loaded', id => { if (id === spec.id && apply()) done(); });
+  offF = e.bus.on?.('assets:failed', id => { if (id === spec.id) { apply(); done(); } });
 }

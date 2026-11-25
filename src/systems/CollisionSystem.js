@@ -1,7 +1,13 @@
 import * as THREE from 'three';
+import { CollisionWorld } from '../world/CollisionWorld.js';
 
 const G = 9.81;
-const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _nB = new THREE.Vector3(), _t = new THREE.Vector3(), _iq = new THREE.Quaternion(), _hit = { nx: 0, ny: 0, nz: 0, pen: 0, item: null };
+const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _ps = new THREE.Vector3(), _nB = new THREE.Vector3(), _t = new THREE.Vector3();
+const _qs = new THREE.Quaternion(), _iq = new THREE.Quaternion();
+const _hit = { nx: 0, ny: 0, nz: 0, pen: 0, item: null };
+const _dynHit = { nx: 0, ny: 0, nz: 0, pen: 0, body: null };
+const _hit2 = { nx: 0, ny: 0, nz: 0, pen: 0, item: null };
+const _resolved = { x: 0, z: 0 };
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0); // hides a knocked-down tree instance
 
 /**
@@ -31,20 +37,31 @@ export function makeProbes(ac) {
  * Wheels against the ground stay in FlightModel; this system never runs for a parked aircraft.
  */
 export class CollisionSystem {
-  init(e) { this.e = e; }
-  update(dt, e) { for (const ac of e.aircraft.list) if (!ac.destroyed) this.check(ac, dt, e); }
+  init(e) { this.e = e; this.dyn = new CollisionWorld(e.world?.colliders ?? null); }
+  update(dt, e) {
+    this.dyn.rebuild(e); // one authoritative dynamic-body list per frame (aircraft, vehicles, crates, walker)
+    for (const ac of e.aircraft.list) if (!ac.destroyed) this.check(ac, dt, e);
+  }
 
   check(ac, dt, e) {
-    const cs = ac.cs ??= { probes: makeProbes(ac), prev: [], cool: {}, spark: 0 };
+    const cs = ac.cs ??= { probes: makeProbes(ac), prev: [], cool: {}, spark: 0, prevQ: ac.quat.clone(), prevPos: ac.pos.clone() };
     ac.kick *= Math.exp(-4 * dt);
-    if (ac.onGround && ac.vel.lengthSq() < 0.05) { cs.prev.length = 0; return; } // parked
+    if (ac.onGround && ac.vel.lengthSq() < 0.05) { cs.prev.length = 0; cs.prevQ.copy(ac.quat); cs.prevPos.copy(ac.pos); return; } // parked
     for (const k in cs.cool) cs.cool[k] -= dt; cs.spark -= dt;
     for (let i = 0; i < cs.probes.length && !ac.destroyed; i++) {
-      const pb = cs.probes[i]; _p.copy(pb.p).applyQuaternion(ac.quat).add(ac.pos);
-      const prev = cs.prev[i] ??= _p.clone(), n = Math.min(8, Math.max(1, Math.ceil(prev.distanceTo(_p) / 0.8)));
-      for (let k = 1; k <= n; k++) { _s.lerpVectors(prev, _p, k / n); if (this.probe(ac, cs, pb, _s, dt, e)) break; }
-      prev.copy(_p.copy(pb.p).applyQuaternion(ac.quat).add(ac.pos)); // final position, after any push-out
+      const pb = cs.probes[i];
+      _p.copy(pb.p).applyQuaternion(ac.quat).add(ac.pos);
+      const prev = cs.prev[i] ??= _p.clone(), dist = prev.distanceTo(_p);
+      const n = Math.min(24, Math.max(1, Math.ceil(dist / 0.6))); // denser sweep: thin poles no longer tunnel at speed
+      for (let k = 1; k <= n; k++) {
+        const t = k / n;
+        _qs.slerpQuaternions(cs.prevQ, ac.quat, t); _ps.lerpVectors(cs.prevPos, ac.pos, t);
+        _s.copy(pb.p).applyQuaternion(_qs).add(_ps); // sweep the rotating airframe, not just a straight chord
+        if (this.probe(ac, cs, pb, _s, dt, e)) break;
+      }
+      prev.copy(_p);
     }
+    cs.prevQ.copy(ac.quat); cs.prevPos.copy(ac.pos);
   }
 
   /** Test one sample point of one probe. Returns true if it hit something (and the aircraft was moved). */
@@ -55,16 +72,24 @@ export class CollisionSystem {
       if (!water) { const d = 2; nx = w.groundHeight(s.x - d, s.z) - w.groundHeight(s.x + d, s.z); nz = w.groundHeight(s.x, s.z - d) - w.groundHeight(s.x, s.z + d); const il = 1 / Math.hypot(nx, 2 * d, nz); nx *= il; ny = 2 * d * il; nz *= il; }
       this.resolve(ac, cs, pb, s, nx, ny, nz, -agl, water ? 'water' : 'terrain', null, dt, e); return true;
     }
-    const col = w.colliders; // buildings, hangars, tower, tanks, trees: only worth testing near the ground
-    if (col && col.count && agl < 55 && col.test(s.x, s.y, s.z, v.x, v.y, v.z, _hit)) { this.resolve(ac, cs, pb, s, _hit.nx, _hit.ny, _hit.nz, _hit.pen, _hit.item.kind, _hit.item, dt, e); return true; }
+    const col = w.colliders; // buildings, hangars, tower, tanks, trees, windsocks, PAPI, docks
+    if (col && col.count && col.testRadius(s.x, s.y, s.z, 0.35, v.x, v.y, v.z, _hit)) { this.resolve(ac, cs, pb, s, _hit.nx, _hit.ny, _hit.nz, _hit.pen, _hit.item.kind, _hit.item, dt, e); return true; }
+    // Dynamic world: other aircraft, vehicles, crates and the walking pilot.
+    if (this.dyn.test(s.x, s.y, s.z, 0.35, ac, _dynHit)) {
+      const b = _dynHit.body, kind = b.type === 'walker' ? 'walker' : b.type;
+      this.resolve(ac, cs, pb, s, _dynHit.nx, _dynHit.ny, _dynHit.nz, _dynHit.pen, kind, null, dt, e, b); return true;
+    }
     return false;
   }
 
-  resolve(ac, cs, pb, s, nx, ny, nz, pen, kind, item, dt, e) {
-    const v = ac.vel, soft = kind === 'tree'; pen = Math.min(pen, 4) + 0.02;
+  resolve(ac, cs, pb, s, nx, ny, nz, pen, kind, item, dt, e, body = null) {
+    const v = ac.vel, soft = kind === 'tree' || kind === 'crate' || kind === 'walker'; pen = Math.min(pen, 6) + 0.02;
     ac.pos.x += nx * pen; ac.pos.y += ny * pen; ac.pos.z += nz * pen;
     const vn = -(v.x * nx + v.y * ny + v.z * nz); // approach speed along the surface normal
     if (vn > 0) { const k = soft ? 0.5 : 1.12; v.x += nx * vn * k; v.y += ny * vn * k; v.z += nz * vn * k; } // trees yield (half the approach speed is lost); solids stop you with a small bounce
+    if (body && vn > 0 && !soft) { // shove the other dynamic body the other way, scaled by relative mass
+      const other = body.owner; if (other?.vel) { const share = Math.min(0.8, ac.mass / (ac.mass + (body.mass || 1000))) * vn; other.vel.x -= nx * share; other.vel.y -= ny * share; other.vel.z -= nz * share; }
+    }
     const dn = v.x * nx + v.y * ny + v.z * nz; _t.set(v.x - nx * dn, v.y - ny * dn, v.z - nz * dn); const vt = _t.length(); // sliding speed
     if (vt > 0.01) { const mu = soft ? 0.2 : kind === 'water' ? 0.5 : 0.6, f = Math.max(0, vt - mu * G * dt * (1 + Math.max(0, vn) * 0.1)) / vt; v.set(nx * dn + _t.x * f, ny * dn + _t.y * f, nz * dn + _t.z * f); }
 
@@ -84,5 +109,31 @@ export class CollisionSystem {
       if (cs.spark <= 0) { cs.spark = 0.05; e.fx?.burst('spark', s, 2, 3, v); }
       e.damage?.scrape(ac, pb.part, vt, dt);
     }
+  }
+
+  /** Resolve a walker capsule against every static solid and dynamic body. Returns a shared {x,z} (copy it if keeping). */
+  resolveWalker(w, x, z, r, y0, y1) {
+    const out = _resolved; out.x = x; out.z = z;
+    const y = (y0 + y1) / 2, col = this.e.world?.colliders, v = w.vel;
+    if (col?.count && col.testRadius(x, y, z, r, v.x, v.y, v.z, _hit2)) { out.x += _hit2.nx * (_hit2.pen + 0.02); out.z += _hit2.nz * (_hit2.pen + 0.02); }
+    if (this.dyn.test(out.x, y, out.z, r, w, _dynHit, this.e.aircraft?.player)) { out.x += _dynHit.nx * (_dynHit.pen + 0.02); out.z += _dynHit.nz * (_dynHit.pen + 0.02); }
+    return out;
+  }
+
+  /** Same for a driven vehicle (larger radius); ground/water/ramp handling stays in CargoSystem. */
+  resolveVehicle(it, x, z, r, y0, y1) {
+    const out = _resolved; out.x = x; out.z = z;
+    const y = (y0 + y1) / 2, col = this.e.world?.colliders, v = it.vel;
+    if (col?.count && col.testRadius(x, y, z, r, v.x, v.y, v.z, _hit2)) { out.x += _hit2.nx * (_hit2.pen + 0.02); out.z += _hit2.nz * (_hit2.pen + 0.02); }
+    if (this.dyn.test(out.x, y, out.z, r, it, _dynHit, this.e.aircraft?.player)) { out.x += _dynHit.nx * (_dynHit.pen + 0.02); out.z += _dynHit.nz * (_dynHit.pen + 0.02); }
+    return out;
+  }
+
+  /** Swept test for falling cargo: lands on (or is destroyed by) roofs, vehicles and terrain objects. */
+  cargoHit(it, x0, y0, z0, x1, y1, z1) {
+    const col = this.e.world?.colliders, v = it.vel;
+    if (col?.count && col.sweep(x0, y0, z0, x1, y1, z1, 0.8, v.x, v.y, v.z, _hit2)) return _hit2;
+    if (this.dyn.sweep(x0, y0, z0, x1, y1, z1, 0.8, it, _dynHit)) { _hit2.nx = _dynHit.nx; _hit2.ny = 0.5; _hit2.nz = _dynHit.nz; _hit2.pen = _dynHit.pen; _hit2.item = null; return _hit2; }
+    return null;
   }
 }

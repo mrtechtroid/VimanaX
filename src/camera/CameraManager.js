@@ -72,7 +72,7 @@ export class CameraManager {
   /** Held keys + gamepad D-pad. */
   poll(dt) {
     const k = this.keys, h = (...c) => c.some(x => k.has(x)) ? 1 : 0, v = this.view;
-    const g = (navigator.getGamepads?.() || [])[0], b = i => g?.buttons[i]?.pressed ? 1 : 0;
+    const g = (navigator.getGamepads?.() || []).find(p => p && p.connected !== false), b = i => g?.buttons[i]?.pressed ? 1 : 0;
     const yaw = h('Comma', 'Numpad4') - h('Period', 'Numpad6') + b(14) - b(15), pit = h('Semicolon', 'Numpad8') - h('Slash', 'Numpad2') + b(12) - b(13), z = h('Minus', 'NumpadSubtract') - h('Equal', 'NumpadAdd');
     if (yaw || pit) { const r = 1.8 * this.e.settings.get('cameraSensitivity') * dt; v.yaw += yaw * r; v.pitch += pit * r; this.idle = 0; }
     if (z) this.zoomBy(Math.exp(z * dt * 1.4));
@@ -122,7 +122,7 @@ export class CameraManager {
   }
   /** Turbulence / rough-ground shake, applied in camera space. */
   shake(dt, a, k) {
-    const e = this.e, cam = e.camera, amp = e.settings.get('cameraShake') * k * (0.012 * (e.env.intensity || 0) + 0.5 * Math.abs(a.bump || 0) + 0.12 * (a.kick || 0)); if (amp < 1e-4) return; const t = e.time;
+    const e = this.e, cam = e.camera, amp = e.settings.get('cameraShake') * k * (0.012 * (e.env.intensity || 0) + 0.5 * Math.abs(a.bump || 0) + 0.12 * (a.kick || 0) + 0.06 * (a.telemetry?.buffet || 0)); if (amp < 1e-4) return; const t = e.time;
     _a.set(Math.sin(t * 37) * amp, Math.sin(t * 29 + 1) * amp, 0).applyQuaternion(cam.quaternion); cam.position.add(_a); _l.setFromEuler(_e.set(Math.sin(t * 17) * amp * 0.6, 0, Math.sin(t * 23 + 2) * amp * 0.9)); cam.quaternion.multiply(_l);
   }
   /** Blend from the previous viewpoint after a seat / mode / subject change, then apply FOV. */

@@ -31,8 +31,9 @@ export class MapUI {
     try { const r = w.mapRaster(768), cv = document.createElement('canvas'); cv.width = r.width; cv.height = r.height; const x = cv.getContext('2d'); if (x && typeof ImageData !== 'undefined') { x.putImageData(new ImageData(r.data, r.width, r.height), 0, 0); this._img = cv; } } catch { /* headless */ }
     return this._img;
   }
-  update() {
+  update(dt = 1 / 60) {
     const e = this.e, a = e.walk.focus, g = this.g, s = this.c.width, big = this.big; if (!a) return;
+    this.acc = (this.acc || 0) + dt; if (this.acc < (big ? 0.1 : 0.05)) return; this.acc = 0; // 20 Hz minimap / 10 Hz full map: a 768px raster redraw every frame is wasted work
     if (!this.layoutOk && document.body.classList.contains('compact')) { this.layoutOk = true; this.layout(); }
     if (this.route.length) { const w = this.route[this.idx]; if (Math.hypot(w.x - a.pos.x, w.z - a.pos.z) < 250 && this.idx < this.route.length - 1) this.idx++; }
     _v.set(0, 0, -1).applyQuaternion(a.quat); const h = Math.atan2(_v.x, -_v.z), k = big ? s / e.world.cfg.size : s / 5000, cx = big ? 0 : a.pos.x, cz = big ? 0 : a.pos.z;

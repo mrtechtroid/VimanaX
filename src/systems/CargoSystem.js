@@ -27,11 +27,14 @@ const chuteMesh = big => { const c = new THREE.Mesh(new THREE.SphereGeometry(big
  * engine.cargo.driven = vehicle being driven (camera follows it). Entering/leaving vehicles is handled by WalkSystem.
  */
 export class CargoSystem {
-  constructor() { this.items = []; this.driven = null; }
+  constructor() { this.items = []; this.driven = null; this.requested = new Set(); }
   init(e) {
     this.e = e; const sp = e.world.spawnPoint(), r = sp.heading, fx = Math.sin(r), fz = -Math.cos(r), rx = Math.cos(r), rz = Math.sin(r);
     ['supply', 'supply', 'supply', 'scout', 'sport', 'truck'].forEach((t, i) => this.add(t, sp.pos.x + rx * 24 + fx * (14 + i * 9), sp.pos.z + rz * 24 + fz * (14 + i * 9), r));
-    e.bus.on('action', a => this.act(a)); e.bus.on('assets:loaded', () => this.upgradeModels()); e.bus.on('aircraft:spawn', () => { for (const it of this.items) if (it.state === 'bay') { it.state = 'ground'; } });
+    e.bus.on('action', a => this.act(a)); e.bus.on('assets:loaded', () => this.upgradeModels());
+    e.bus.on('aircraft:spawn', () => { // a respawned aircraft leaves no bay to sit in: put cargo back on the ground, not in mid-air
+      for (const it of this.items) if (it.state === 'bay') { it.state = 'ground'; it.onDeck = null; it.speed = 0; it.vel.set(0, 0, 0); it.mesh.position.y = this.e.world.groundHeight(it.pos.x, it.pos.z); }
+    });
     this.upgradeModels();
   }
   add(type, x, z, heading = 0) {
@@ -43,7 +46,7 @@ export class CargoSystem {
   upgradeModels() {
     for (const it of this.items) { const V = VEHICLES[it.kind]; if (!V?.glb || !it.body.userData.fallback) continue; const inst = this.e.assets?.instance(V.glb); if (!inst) continue;
       const m = inst.scene, wrap = new THREE.Group(); if (V.flip) m.rotation.y = Math.PI; wrap.add(m); const box3 = new THREE.Box3().setFromObject(wrap); m.position.y -= box3.min.y; m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-      it.mesh.remove(it.body); it.body = wrap; it.mesh.add(wrap); wrap.userData.wheels = (V.wheels || []).map(n => m.getObjectByName(n)).filter(Boolean); if (inst.animations.length) { wrap.userData.mixer = new THREE.AnimationMixer(m); const a = wrap.userData.mixer.clipAction(inst.animations[0]); a.play(); } }
+      it.mesh.remove(it.body); disposeTree(it.body); it.body = wrap; it.mesh.add(wrap); wrap.userData.wheels = (V.wheels || []).map(n => m.getObjectByName(n)).filter(Boolean); if (inst.animations.length) { wrap.userData.mixer = new THREE.AnimationMixer(m); const a = wrap.userData.mixer.clipAction(inst.animations[0]); a.play(); } }
   }
   /** Nearest vehicle to a world point: on the ground within r, or (with `ac`) parked in that aircraft's bay. */
   nearVehicle(o, r, ac = null) {
@@ -60,6 +63,7 @@ export class CargoSystem {
   act(a) {
     const e = this.e, p = e.aircraft.player, say = m => e.bus.emit('hud:message', m);
     if (a !== 'ramp' && a !== 'cargo') return;
+    if (!p) return; // actions arrive on the global bus and can fire before the first spawn
     const c = p.def.cargo; if (!c) return say('This aircraft has no cargo bay');
     if (a === 'ramp') { p.controls.rampOpen = !p.controls.rampOpen; e.bus.emit('sfx', 'ramp'); return say(p.controls.rampOpen ? 'Ramp opening' : 'Ramp closing'); }
     if (p.destroyed) return; if (p.rampPos < 0.9) return say('Open the ramp first (I)');
@@ -88,12 +92,16 @@ export class CargoSystem {
       if (hull && !corridor) { const R2 = V.length * 0.5, px = hull.hx + V.halfWidth + 0.3 - Math.abs(_b.x), pz1 = _b.z - (hull.z0 - R2), pz2 = hull.z1 + R2 - _b.z; if (px > 0 && pz1 > 0 && pz2 > 0) { it.speed *= 0.2; nx = it.pos.x; nz = it.pos.z; } }
       else if (A) { const dy = deckY(p, _b.x, _b.z); if (dy != null) { onDeck = p; y = p.pos.y + dy; if (!open && _b.z > hz - V.length * 0.5 - 0.3) { it.speed *= 0.2; nx = it.pos.x; nz = it.pos.z; } } }
     }
+    if (!onDeck && e.collision) { // buildings, hangars, trees, crates, other vehicles and other aircraft are solid to driven vehicles
+      const fix = e.collision.resolveVehicle(it, nx, nz, Math.max(V.halfWidth, 1), it.pos.y, it.pos.y + 2);
+      if (fix) { const dx = fix.x - it.pos.x, dz = fix.z - it.pos.z; if (Math.abs(dx) + Math.abs(dz) > Math.abs(nx - it.pos.x) + Math.abs(nz - it.pos.z) + 0.01) it.speed *= 0.3; nx = fix.x; nz = fix.z; }
+    }
     if (w.isWater(nx, nz)) { it.speed *= 0.3; nx = it.pos.x; nz = it.pos.z; }
     it.pos.x = nx; it.pos.z = nz; it.onDeck = onDeck; y ??= w.groundHeight(nx, nz); it.pos.y += (y - it.pos.y) * Math.min(1, onDeck ? 1 : dt * 20);
     // body follows the terrain slope (not on the deck: it is level there)
     const d = 2.2; _n.set((w.groundHeight(nx - d, nz) - w.groundHeight(nx + d, nz)) / (2 * d), 1, (w.groundHeight(nx, nz - d) - w.groundHeight(nx, nz + d)) / (2 * d)).normalize(); if (onDeck) _n.set(0, 1, 0);
     _q.setFromUnitVectors(UP, _n); _q2.setFromAxisAngle(UP, it.yaw); it.quat.slerp(_q.multiply(_q2), Math.min(1, dt * 8));
-    if (onDeck && p && it.pos.z !== undefined) { _b.set(it.pos.x, 0, it.pos.z).sub(p.pos); _b.y = 0; _b.applyQuaternion(_iq.copy(p.quat).invert()); const A = p.mesh.userData.parts.rampAngles; if (_b.z < A.hingeZ - 6.4 && it.speed > 1 && this.autoStow(p, it)) return; }
+    if (onDeck && p) { _b.set(it.pos.x, 0, it.pos.z).sub(p.pos); _b.y = 0; _b.applyQuaternion(_iq.copy(p.quat).invert()); const A = p.mesh.userData.parts.rampAngles; if (_b.z < A.hingeZ - 6.4 && it.speed > 1 && this.autoStow(p, it)) return; }
   }
   autoStow(p, it) {
     const c = p.def.cargo; if (!c || p.vel.length() > 3) return false; if (p.mass - p.def.flight.mass + it.mass > c.maxMass) { if (!it.warned) { it.warned = true; this.e.bus.emit('hud:message', 'Over cargo weight limit - back out'); } return false; }
@@ -101,19 +109,31 @@ export class CargoSystem {
     this.e.bus.emit('hud:message', `${it.name} secured in bay`); return true;
   }
   update(dt) {
-    const e = this.e, world = e.world, s = e.input.state, p = e.aircraft.player, wind = e.env.windVector(); if (e.paused) return;
+    const e = this.e, world = e.world, s = e.input.state, p = e.aircraft.player; if (e.paused) return;
+    let wind = null; // only airdrops need the wind vector
+    const focus = e.walk?.focus?.pos || e.camera.position;
     for (const it of this.items) {
       const m = it.mesh;
+      const glb = VEHICLES[it.kind]?.glb; // vehicle models stream in when you get close, not during boot
+      if (glb && !this.requested.has(glb) && it.pos.distanceTo(focus) < 500) { this.requested.add(glb); e.assets?.load(glb); }
       if (it.state === 'bay' && p) { _c.set(0, p.def.interior.floorY, it.slotZ).applyQuaternion(p.quat).add(p.pos); m.position.copy(_c); m.quaternion.copy(p.quat); continue; }
       if (it.state === 'air') {
+        wind ??= e.env.windVector();
         it.t += dt; const chuted = it.t > 1.5, term = it.type === 'vehicle' ? 9 : 7, k = Math.min(1, dt * 0.6); it.chute.visible = chuted;
         if (chuted) { it.vel.y += (-term - it.vel.y) * Math.min(1, dt * 2); it.vel.x += (wind.x - it.vel.x) * k; it.vel.z += (wind.z - it.vel.z) * k; } else it.vel.y -= G * dt;
-        m.position.addScaledVector(it.vel, dt); const gy = world.groundHeight(m.position.x, m.position.z);
-        if (m.position.y <= gy) { m.position.y = gy; it.chute.visible = false; if (it.vel.y < -14) { this.remove(it); continue; } it.state = 'ground'; it.vel.set(0, 0, 0); e.bus.emit('hud:message', 'Cargo landed'); }
-      } else if (it.type === 'vehicle' && it.state === 'ground') {
-        if (it === this.driven || Math.abs(it.speed) > 0.05) this.drive(it, dt, s); else { /* parked: settle on the terrain */ if (!it.onDeck) m.position.y = world.groundHeight(m.position.x, m.position.z); }
-        const sp = it.speed, ws = it.body.userData.wheels; if (ws) for (const w of ws) w.rotation.x -= sp * dt / 0.36;
-        it.body.userData.mixer?.update(Math.abs(sp) * dt * 0.7);
+        const px = m.position.x, py = m.position.y, pz = m.position.z;
+        m.position.addScaledVector(it.vel, dt);
+        const solidHit = e.collision?.cargoHit?.(it, px, py, pz, m.position.x, m.position.y, m.position.z);
+        if (solidHit && it.vel.y < -14) { this.remove(it); continue; } // a hard hit on a roof/vehicle destroys the crate
+        const gy = world.groundHeight(m.position.x, m.position.z);
+        if (solidHit || m.position.y <= gy) { m.position.y = solidHit?.item ? solidHit.item.y1 : solidHit ? py : gy; it.chute.visible = false; if (it.vel.y < -14) { this.remove(it); continue; } it.state = 'ground'; it.vel.set(0, 0, 0); e.bus.emit('hud:message', 'Cargo landed'); }
+      } else if (it.state === 'ground') {
+        if (!it.onDeck) m.position.y = world.groundHeight(m.position.x, m.position.z); // parked crates and vehicles settle on the terrain
+        if (it.type === 'vehicle') {
+          if (it === this.driven || Math.abs(it.speed) > 0.05) this.drive(it, dt, s);
+          const sp = it.speed, ws = it.body.userData.wheels; if (ws) for (const w of ws) w.rotation.x -= sp * dt / 0.36;
+          it.body.userData.mixer?.update(Math.abs(sp) * dt * 0.7);
+        }
       }
     }
   }

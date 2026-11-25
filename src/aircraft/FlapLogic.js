@@ -13,9 +13,11 @@ export const stallSpeed = (def, flap = 0, mass = def.flight.mass) => {
 
 /** vs1 = clean stall, vs0 = full-flap stall, vfe[i] = max speed with flap notch i (Infinity for notch 0). All m/s. */
 export function flapSpeeds(def, mass = def.flight.mass) {
+  const key = Math.round(mass), cache = def._flapCache ??= new Map(), hit = cache.get(key);
+  if (hit) return hit; // called from flap scheduling, the PFD and the cockpit: all read-only
   const fl = def.flaps, n = fl.length, vs1 = stallSpeed(def, 0, mass), vs0 = stallSpeed(def, fl[n - 1], mass);
   const vfe = fl.map((_, i) => i === 0 ? Infinity : def.flight.vFe?.[i] ?? vs1 * (n > 2 ? 2.0 - 0.55 * (i - 1) / (n - 2) : 1.7));
-  return { vs1, vs0, vfe };
+  const out = { vs1, vs0, vfe }; cache.set(key, out); return out;
 }
 
 export function flapPlan(def) {

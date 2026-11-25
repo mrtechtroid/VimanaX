@@ -5,7 +5,8 @@ export class GamepadInput {
   constructor() { this.prev = {}; }
   init(bus) { this.bus = bus; }
   poll(dt) {
-    const g = (navigator.getGamepads?.() || [])[0]; if (!g) return {};
+    const g = (navigator.getGamepads?.() || []).find(p => p && p.connected !== false);
+    if (!g) { this.prev = {}; return {}; } // a pad in a later slot still works; clear held state on disconnect
     for (const [i, a] of BUTTON_LIST) { const on = !!g.buttons[i]?.pressed; if (on && !this.prev[i]) this.bus.emit('action', a); this.prev[i] = on; }
     const dz = v => Math.abs(v) < 0.12 ? 0 : v;
     return { roll: dz(g.axes[0]), pitch: dz(g.axes[1]), yaw: dz(g.axes[2] || 0), throttleDelta: -dz(g.axes[3] || 0) * dt * 0.5, brake: g.buttons[0]?.pressed ? 1 : 0 };

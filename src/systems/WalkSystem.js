@@ -32,20 +32,27 @@ export class WalkSystem {
     e.renderer.domElement.addEventListener('click', () => { if (this.mode === 'foot' && !this.third && !document.body.classList.contains('coarse') && !document.pointerLockElement) e.renderer.domElement.requestPointerLock?.(); });
     e.bus.on('action', a => { if (a === 'interact' || a === 'drive') this.interact(); else if (a === 'door') this.toggleDoor(); else if (a === 'camera' && this.mode === 'foot') { this.third = !this.third; say(this.third ? 'Third person' : 'First person'); } else if (a === 'jump' && this.mode === 'foot' && this.grounded && !e.paused) this.vy = 4.2; }); // 'jump' = touch button (keyboard uses Space directly)
     e.bus.on('aircraft:spawn', () => this.reset());
-    e.bus.on('assets:loaded', id => { if (id === 'soldier') this.upgradeAvatar(); }); this.upgradeAvatar();
+    e.bus.on('assets:loaded', id => { if (id === 'soldier') this.upgradeAvatar(); }); // the soldier model is fetched only when you actually get out of the seat
   }
   upgradeAvatar() {
     const inst = this.e.assets?.instance('soldier'); if (!inst || this.mixer) return; const m = inst.scene; m.rotation.y = Math.PI; this.avatar.remove(this.fb); disposeTree(this.fb); this.avatar.add(m); m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
     this.mixer = new THREE.AnimationMixer(m); this.acts = {}; for (const c of inst.animations) if (['Idle', 'Walk', 'Run'].includes(c.name)) { const a = this.mixer.clipAction(c); a.play(); a.setEffectiveWeight(c.name === 'Idle' ? 1 : 0); this.acts[c.name] = a; }
   }
-  reset() { this.mode = 'aircraft'; this.seat = 'pilot'; this.inside = null; this.avatar.visible = false; this.prompt = null; if (this.e.cargo) this.e.cargo.driven = null; }
+  reset() {
+    this.mode = 'aircraft'; this.seat = 'pilot'; this.inside = null; this.avatar.visible = false; this.prompt = null;
+    this.vy = 0; this.speed = 0; this.vel.set(0, 0, 0); this.stepT = 0; this.pitch = 0; this.third = false; this.closeTimer = null; this.onGround = true;
+    if (this.e.cargo) this.e.cargo.driven = null;
+  }
   look(dy, dp) { this.yaw += dy; this.pitch = clamp(this.pitch + dp, -1.3, 1.3); }
   get grounded() { return this.onGround; }
   say(m) { this.e.bus.emit('hud:message', m); }
 
   // ------------------------------------------------------------------ transitions
   /** Place the walker at a world position, facing `yaw`. */
-  standAt(x, z, y, yaw, inside = null) { this.mode = 'foot'; this.inside = inside; this.pos.set(x, y, z); this.yaw = yaw; this.pitch = 0; this.vy = 0; this.speed = 0; this.avatar.visible = true; this.onGround = true; }
+  standAt(x, z, y, yaw, inside = null) {
+    this.mode = 'foot'; this.inside = inside; this.pos.set(x, y, z); this.yaw = yaw; this.pitch = 0; this.vy = 0; this.speed = 0; this.avatar.visible = true; this.onGround = true;
+    if (!this.mixer) this.e.assets?.load('soldier'); // lazily stream the pilot model; the procedural avatar covers the wait
+  }
   doorWorld(ac, p, out = _a) { return out.set(p.x, 0, p.z).applyQuaternion(ac.quat).add(ac.pos); }
   aircraftYaw(ac) { _a.set(0, 0, -1).applyQuaternion(ac.quat); return Math.atan2(-_a.x, -_a.z); }
   standUp() {
@@ -114,7 +121,7 @@ export class WalkSystem {
     if (this.closeTimer != null && (this.closeTimer -= dt) <= 0) { this.closeTimer = null; ac?.mesh.userData.parts.doors.forEach(d => { if (d.enter === this.seat || d.enter === 'pilot') d.target = 0; }); }
     if (this.mode !== 'foot') { this.prompt = null; this.updateAvatar(dt); if (this.mode === 'aircraft' && ac) this.quat.copy(ac.quat); return; }
     if (e.paused) return;
-    const s = e.input.state, g = (navigator.getGamepads?.() || [])[0], sprint = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || !!this.touchSprint;
+    const s = e.input.state, g = (navigator.getGamepads?.() || []).find(p => p && p.connected !== false), sprint = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || !!this.touchSprint;
     if (g && Math.abs(g.axes[2]) > 0.15) this.look(-g.axes[2] * dt * 2.2, 0);
     let fwd = -s.pitch, str = s.roll; const l = Math.hypot(fwd, str); if (l > 1) { fwd /= l; str /= l; }
     const top = sprint ? 5.2 : 1.9, sy = Math.sin(this.yaw), cy = Math.cos(this.yaw); // forward = (-sin, -cos), right = (cos, -sin)
@@ -135,8 +142,11 @@ export class WalkSystem {
       for (const a of e.aircraft.list) { const hull = a.def.walk?.hull; if (!hull) continue; _b.set(nx, 0, nz).sub(a.pos); _b.y = 0; _b.applyQuaternion(_iq.copy(a.quat).invert()); const hz = a.mesh.userData.parts.rampAngles?.hingeZ, rampOk = a.rampPos > 0.9 && hz != null && Math.abs(_b.x) < a.def.interior.halfW && _b.z > hz - 1;
         if (rampOk && _b.z < rampEnd(a) - 0.2 && _b.z > hz - 0.2) { this.inside = a; this.say('Entering cargo bay'); break; }
         const px = hull.hx + R - Math.abs(_b.x), pz1 = _b.z - (hull.z0 - R), pz2 = hull.z1 + R - _b.z;
-        if (!rampOk && px > 0 && pz1 > 0 && pz2 > 0 && Math.abs(_b.y) < 99) { if (px < Math.min(pz1, pz2)) _b.x = Math.sign(_b.x || 1) * (hull.hx + R); else _b.z = pz1 < pz2 ? hull.z0 - R : hull.z1 + R; _a.copy(_b).applyQuaternion(a.quat).add(a.pos); nx = _a.x; nz = _a.z; } }
-      for (const v of e.cargo.items) { if (v.state !== 'ground' || v === e.cargo.driven) continue; const r = (v.type === 'vehicle' ? Math.max(v.def.length ?? 4, 3) * 0.5 : 1) + R, dx = nx - v.pos.x, dz = nz - v.pos.z, d = Math.hypot(dx, dz); if (d < r && v.type === 'vehicle') { nx = v.pos.x + dx / d * r; nz = v.pos.z + dz / d * r; } }
+        if (!rampOk && px > 0 && pz1 > 0 && pz2 > 0) { if (px < Math.min(pz1, pz2)) _b.x = Math.sign(_b.x || 1) * (hull.hx + R); else _b.z = pz1 < pz2 ? hull.z0 - R : hull.z1 + R; _a.copy(_b).applyQuaternion(a.quat).add(a.pos); nx = _a.x; nz = _a.z; } }
+      for (const v of e.cargo.items) { if (v.state !== 'ground' || v === e.cargo.driven) continue; const r = (v.type === 'vehicle' ? Math.max(v.def.length ?? 4, 3) * 0.5 : 1) + R, dx = nx - v.pos.x, dz = nz - v.pos.z, d = Math.hypot(dx, dz); if (d > 1e-6 && d < r && v.type === 'vehicle') { nx = v.pos.x + dx / d * r; nz = v.pos.z + dz / d * r; } }
+      // All static solids and dynamic bodies (buildings, trees, tanks, crates, other aircraft) now stop the walker.
+      const fix = e.collision?.resolveWalker?.(this, nx, nz, R, this.pos.y, this.pos.y + 1.8);
+      if (fix) { nx = fix.x; nz = fix.z; }
       if (w.isWater(nx, nz) && !w.isWater(this.pos.x, this.pos.z)) { nx = this.pos.x; nz = this.pos.z; this.vel.set(0, 0, 0); }
       floor = w.groundHeight(nx, nz);
       if (floor - this.pos.y > 0.9 && this.onGround) { nx = this.pos.x; nz = this.pos.z; floor = w.groundHeight(nx, nz); }

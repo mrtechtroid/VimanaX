@@ -7,7 +7,8 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 export const MODELS = { soldier: 'assets/models/Soldier.glb', ferrari: 'assets/models/ferrari.glb', truck: 'assets/models/CesiumMilkTruck.glb',
   pa28: 'assets/models/aircraft/pa28.glb', citation: 'assets/models/aircraft/citation.glb', atr42: 'assets/models/aircraft/atr42.glb', b738: 'assets/models/aircraft/b738.glb' };
 /** Aircraft skins load on demand (when that aircraft is spawned), everything else at start-up. */
-const LAZY = new Set(['pa28', 'citation', 'atr42', 'b738']);
+// Everything is loaded on demand now: aircraft skins on spawn, the soldier on stand-up, vehicles when you approach them.
+const LAZY = new Set(Object.keys(MODELS));
 export class Assets {
   constructor(models = MODELS) { this.models = models; this.cache = {}; this.pending = {}; }
   init(e) {
